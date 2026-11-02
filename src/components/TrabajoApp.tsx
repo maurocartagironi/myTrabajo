@@ -74,6 +74,7 @@ const ESTADOS_TRABAJO: { value: string; className: string }[] = [
   { value: 'Pendiente', className: 'text-[var(--text-tertiary)] bg-[var(--bg-surface-hover)] border-[var(--border)]' },
   { value: 'En espera', className: 'text-orange-400 bg-orange-500/10 border-orange-500/30' },
   { value: 'En desarrollo', className: 'text-blue-400 bg-blue-500/10 border-blue-500/30' },
+  { value: 'Listo para pasar', className: 'text-violet-400 bg-violet-500/10 border-violet-500/30' },
   { value: 'Bloqueado', className: 'text-red-400 bg-red-500/10 border-red-500/30' },
   { value: 'Hecho', className: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
 ];
