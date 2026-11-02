@@ -6,16 +6,15 @@ import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { useTrabajo } from '../context/TrabajoContext';
 import type { TareaTrabajo } from '../data/trabajo';
 
-// Config pública (no es secreta: es la misma que ya viaja en el bundle de MyFinanzas) de la
-// app vieja, para poder leer "trabajo"/"trabajoColores" de ahí una sola vez y traerlos acá.
-// Se usa como una segunda app de Firebase aparte (named app "myfinanzas"), con su propio login:
-// la persona inicia sesión en ESE proyecto con su cuenta de Google (la misma cuenta, pero es un
-// login aparte porque es un proyecto de Firebase distinto) y de ahí se lee su propio documento,
-// con las mismas reglas de seguridad de siempre (solo puede leer el suyo).
+// Config de la app vieja, para poder leer "trabajo"/"trabajoColores" de ahí una sola vez y
+// traerlos acá. Se usa como una segunda app de Firebase aparte (named app "myfinanzas"), con su
+// propio login: la persona inicia sesión en ESE proyecto con su cuenta de Google (la misma
+// cuenta, pero es un login aparte porque es un proyecto de Firebase distinto) y de ahí se lee su
+// propio documento, con las mismas reglas de seguridad de siempre (solo puede leer el suyo).
 const MYFINANZAS_CONFIG = {
-  apiKey: 'AIzaSyBPVfKQhl6D8-iNcdJBvTvC5U018SDMFlw',
-  authDomain: 'myfinanzas-mdc.firebaseapp.com',
-  projectId: 'myfinanzas-mdc',
+  apiKey: import.meta.env.VITE_MYFINANZAS_API_KEY,
+  authDomain: import.meta.env.VITE_MYFINANZAS_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_MYFINANZAS_PROJECT_ID,
 };
 
 // Componente temporal: se borra del proyecto una vez hecha la migración de una sola vez.
