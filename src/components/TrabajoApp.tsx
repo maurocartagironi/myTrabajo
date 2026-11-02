@@ -106,6 +106,15 @@ function colorDeProyecto(nombre: string | undefined, colores: Record<string, str
   return colores[nombre] ?? colorHashDeProyecto(nombre);
 }
 
+// Para un estado personalizado (no uno de los fijos en ESTADOS_TRABAJO): el color elegido a
+// mano si lo hay, si no uno automático calculado del texto (misma paleta de proyectos), que
+// siempre da el mismo color para el mismo nombre sin tener que guardar nada hasta que alguien
+// lo cambie a mano.
+function colorDeEstado(nombre: string | undefined, coloresEstado: Record<string, string>): string | undefined {
+  if (!nombre || ESTADOS_TRABAJO.some(e => e.value === nombre)) return undefined;
+  return coloresEstado[nombre] ?? colorHashDeProyecto(nombre);
+}
+
 function groupByField<T>(items: T[], campo: (item: T) => string | undefined, orden?: string[]) {
   const sueltos = items.filter(i => !campo(i));
   let valores = [...new Set(items.map(campo).filter((v): v is string => !!v))];
@@ -113,13 +122,14 @@ function groupByField<T>(items: T[], campo: (item: T) => string | undefined, ord
   return { sueltos, valores, de: (v: string) => items.filter(i => campo(i) === v) };
 }
 
-function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, coloresProyecto }: {
+function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, coloresProyecto, coloresEstado }: {
   items: TareaTrabajo[];
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
   onReorder: (items: TareaTrabajo[]) => void;
   ocultarCampo?: 'proyecto' | 'estado' | 'horario' | 'dia';
   coloresProyecto: Record<string, string>;
+  coloresEstado: Record<string, string>;
 }) {
   const completar = (id: number, texto: string) => {
     if (window.confirm(`¿Marcar "${texto}" como completada? Se borra de la lista.`)) onDelete(id);
@@ -153,6 +163,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
       {items.map(it => {
         const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
         const estadoInfo = ESTADOS_TRABAJO.find(e => e.value === it.estado);
+        const colorEstadoCustom = it.estado && !estadoInfo ? colorDeEstado(it.estado, coloresEstado) : undefined;
 
         // Línea compacta tipo bullet: [Horario] - [Empresa] [Proyecto] - [Texto], con el estado
         // como pill al final y, si hay nota, una segunda línea más chica debajo.
@@ -203,10 +214,19 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
                     </span>
                   ))}
                 </span>
-                {estadoInfo && ocultarCampo !== 'estado' && (
-                  <span className={`shrink-0 text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border ${estadoInfo.className}`}>
-                    {estadoInfo.value}
-                  </span>
+                {it.estado && ocultarCampo !== 'estado' && (
+                  estadoInfo ? (
+                    <span className={`shrink-0 text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border ${estadoInfo.className}`}>
+                      {estadoInfo.value}
+                    </span>
+                  ) : (
+                    <span
+                      className="shrink-0 text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border"
+                      style={{ color: colorEstadoCustom, borderColor: `${colorEstadoCustom}4d`, backgroundColor: `${colorEstadoCustom}1a` }}
+                    >
+                      {it.estado}
+                    </span>
+                  )
                 )}
               </p>
               {it.notas && <p className="text-[0.6875rem] text-[var(--text-tertiary)] leading-tight">{it.notas}</p>}
@@ -264,11 +284,14 @@ export default function TrabajoApp() {
   const onChange = (next: TareaTrabajo[]) => updateData({ tareas: next });
   const coloresProyecto = data.coloresProyecto;
   const setColorProyecto = (proyecto: string, color: string) => updateData({ coloresProyecto: { ...coloresProyecto, [proyecto]: color } });
+  const coloresEstado = data.coloresEstado;
+  const setColorEstado = (estado: string, color: string) => updateData({ coloresEstado: { ...coloresEstado, [estado]: color } });
 
   const [agruparPor, setAgruparPor] = useState<'dia' | 'proyecto' | 'estado' | 'horario' | 'ninguno'>('dia');
   const [modal, setModal] = useState<{ mode: 'add' } | { mode: 'edit'; id: number } | null>(null);
   const [form, setForm] = useState({ texto: '', proyecto: '', empresa: '', us: '', estado: '', horario: '', dia: '', notas: '' });
   const [colorEnEleccion, setColorEnEleccion] = useState<string | null>(null);
+  const [colorEstadoEnEleccion, setColorEstadoEnEleccion] = useState<string | null>(null);
 
   const openAdd = () => { setForm({ texto: '', proyecto: '', empresa: '', us: '', estado: '', horario: '', dia: '', notas: '' }); setModal({ mode: 'add' }); };
   const openEdit = (id: number) => {
@@ -284,7 +307,7 @@ export default function TrabajoApp() {
       proyecto: form.proyecto.trim() || undefined,
       empresa: form.empresa.trim() || undefined,
       us: form.us.trim() || undefined,
-      estado: form.estado || undefined,
+      estado: form.estado.trim() || undefined,
       horario: form.horario.trim() || undefined,
       dia: form.dia.trim() || undefined,
       notas: form.notas.trim() || undefined,
@@ -303,6 +326,8 @@ export default function TrabajoApp() {
   const empresas = valoresDe(i => i.empresa);
   const horarios = valoresDe(i => i.horario);
   const dias = valoresDe(i => i.dia);
+  const estadosCustomUsados = valoresDe(i => i.estado).filter(v => !ESTADOS_TRABAJO.some(e => e.value === v));
+  const estadoEsCustom = form.estado.trim() !== '' && !ESTADOS_TRABAJO.some(e => e.value === form.estado.trim());
 
   const pendientes = items.filter(i => i.estado === 'Pendiente');
   const resto = items.filter(i => i.estado !== 'Pendiente');
@@ -317,6 +342,7 @@ export default function TrabajoApp() {
     onReorder: (reordered: TareaTrabajo[]) => onChange(applyReorder(items, reordered)),
     ocultarCampo: agruparPor === 'ninguno' ? undefined : agruparPor,
     coloresProyecto,
+    coloresEstado,
   });
 
   return (
@@ -405,7 +431,7 @@ export default function TrabajoApp() {
             <TextInput value={form.us} onChange={e => setForm(f => ({ ...f, us: e.target.value }))} />
           </Field>
           <Field label="Estado (opcional)">
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 mb-2">
               <button
                 type="button"
                 onClick={() => setForm(f => ({ ...f, estado: '' }))}
@@ -423,7 +449,57 @@ export default function TrabajoApp() {
                   {e.value}
                 </button>
               ))}
+              {estadosCustomUsados.map(v => {
+                const color = colorDeEstado(v, coloresEstado);
+                const activo = form.estado === v;
+                return (
+                  <button
+                    type="button"
+                    key={v}
+                    onClick={() => setForm(f => ({ ...f, estado: v }))}
+                    className="text-xs px-2.5 py-1 rounded-full border transition-colors"
+                    style={activo
+                      ? { color, borderColor: `${color}4d`, backgroundColor: `${color}1a` }
+                      : { borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                  >
+                    {v}
+                  </button>
+                );
+              })}
             </div>
+            <CampoInput
+              value={form.estado}
+              onChange={v => setForm(f => ({ ...f, estado: v }))}
+              opciones={estadosCustomUsados}
+              datalistId="trabajo-estados-custom"
+              placeholder="O escribí un estado nuevo..."
+            />
+            {estadoEsCustom && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {PROYECTO_COLORS.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setColorEstado(form.estado.trim(), c)}
+                    aria-label={c}
+                    style={{ backgroundColor: c }}
+                    className={`w-6 h-6 rounded-full shrink-0 ${colorDeEstado(form.estado.trim(), coloresEstado) === c ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-surface)] ring-emerald-400' : ''}`}
+                  />
+                ))}
+                <label className="relative w-6 h-6 rounded-full shrink-0 overflow-hidden cursor-pointer" style={{ background: 'conic-gradient(from 0deg, #ef4444, #facc15, #10b981, #3b82f6, #a855f7, #ef4444)' }}>
+                  <input
+                    type="color"
+                    value={colorEstadoEnEleccion ?? colorDeEstado(form.estado.trim(), coloresEstado)}
+                    onChange={e => setColorEstadoEnEleccion(e.target.value)}
+                    onBlur={() => {
+                      if (colorEstadoEnEleccion) setColorEstado(form.estado.trim(), colorEstadoEnEleccion);
+                      setColorEstadoEnEleccion(null);
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
+                </label>
+              </div>
+            )}
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Horario (opcional)">

@@ -8,7 +8,7 @@ export interface TareaTrabajo {
   empresa?: string;
   proyecto?: string;
   us?: string; // número de user story, ej. "SFCDB-429"
-  estado?: string; // uno de los valores fijos en ESTADOS_TRABAJO (TrabajoApp.tsx)
+  estado?: string; // uno de los valores fijos en ESTADOS_TRABAJO, o uno personalizado (TrabajoApp.tsx)
   horario?: string;
   dia?: string;
   notas?: string; // ej. por qué está "En espera", se ve con un ícono al lado del nombre
@@ -17,9 +17,11 @@ export interface TareaTrabajo {
 export interface TrabajoData {
   tareas: TareaTrabajo[];
   coloresProyecto: Record<string, string>; // color elegido a mano por nombre de proyecto
+  coloresEstado: Record<string, string>; // color elegido a mano por nombre de estado personalizado
 }
 
 export const trabajoDefault: TrabajoData = {
   tareas: [],
   coloresProyecto: {},
+  coloresEstado: {},
 };
