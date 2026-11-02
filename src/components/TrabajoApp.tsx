@@ -79,12 +79,6 @@ const ESTADOS_TRABAJO: { value: string; className: string }[] = [
 ];
 const ORDEN_DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
-const ORDEN_HORARIOS = ['Mañana', 'Tarde', 'Noche'];
-function horarioRank(h?: string): number {
-  if (!h) return -1;
-  const idx = ORDEN_HORARIOS.indexOf(h);
-  return idx === -1 ? ORDEN_HORARIOS.length : idx;
-}
 const ICONO_HORARIO: Record<string, typeof Sun> = { 'Mañana': Sun, 'Tarde': Sunset, 'Noche': Moon };
 function horarioBadgeLineas(h: string): [string] | [string, string] {
   const reloj = h.match(/^(\d{1,2}):(\d{2})$/);
@@ -126,13 +120,11 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
   ocultarCampo?: 'proyecto' | 'estado' | 'horario' | 'dia';
   coloresProyecto: Record<string, string>;
 }) {
-  const ordenados = [...items].sort((a, b) => horarioRank(a.horario) - horarioRank(b.horario));
   const completar = (id: number, texto: string) => {
     if (window.confirm(`¿Marcar "${texto}" como completada? Se borra de la lista.`)) onDelete(id);
   };
-  // Mueve la tarea un lugar hacia arriba/abajo dentro del orden guardado (no del orden visual,
-  // que siempre reagrupa por horario) - con sort estable, eso alcanza para reordenar los
-  // empates (mismo horario, o ninguno) entre sí.
+  // Mueve la tarea un lugar hacia arriba/abajo dentro del grupo. El orden se muestra tal cual
+  // está guardado (ya no se reordena solo por horario), así que esto mueve la fila de verdad.
   const mover = (id: number, dir: -1 | 1) => {
     const idx = items.findIndex(i => i.id === id);
     const destino = idx + dir;
@@ -157,7 +149,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
 
   return (
     <div>
-      {ordenados.map(it => {
+      {items.map(it => {
         const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
         const estadoInfo = ESTADOS_TRABAJO.find(e => e.value === it.estado);
 
