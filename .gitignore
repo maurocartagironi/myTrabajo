@@ -1,0 +1,29 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Configuracion local de maquina
+.claude/
+
+# Credenciales de Firebase (nunca committear)
+*serviceAccountKey*.json
+keys-nodeployar.json
+.firebase/
+firebase-debug.log

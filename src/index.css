@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens de color semánticos: un solo lugar para definir cada modo. Los componentes
+   los referencian como clases arbitrarias de Tailwind, ej. bg-[var(--bg-surface)]. */
+:root {
+  --bg-app:            #0f1117;
+  --bg-surface:        #1a1d27;
+  --bg-surface-sunken: #141824;
+  --bg-surface-hover:  #22263a;
+  --border:            #2d3250;
+  --text-primary:      #ffffff;
+  --text-secondary:    #94a3b8;
+  --text-tertiary:     #64748b;
+}
+
+[data-theme="light"] {
+  --bg-app:            #f3f4f8;
+  --bg-surface:        #ffffff;
+  --bg-surface-sunken: #f0f1f6;
+  --bg-surface-hover:  #e9ebf2;
+  --border:            #e1e3ec;
+  --text-primary:      #12131a;
+  --text-secondary:    #565b70;
+  --text-tertiary:     #7a7f92;
+}
+
+[data-theme="light"] .text-emerald-300,
+[data-theme="light"] .text-emerald-400,
+[data-theme="light"] .text-emerald-500 { color: #059669; }
+
+[data-theme="light"] .text-red-300,
+[data-theme="light"] .text-red-400 { color: #dc2626; }
+
+[data-theme="light"] .text-orange-400 { color: #ea580c; }
+
+[data-theme="light"] .text-blue-300,
+[data-theme="light"] .text-blue-400 { color: #2563eb; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: 'Public Sans', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+#root { width: 100%; min-height: 100vh; }
+
+/* Scroll minimalista: invisible hasta pasar el mouse por encima del contenedor. */
+.scrollbar-minimal {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-minimal:hover { scrollbar-color: var(--border) transparent; }
+.scrollbar-minimal::-webkit-scrollbar { width: 6px; }
+.scrollbar-minimal::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-minimal::-webkit-scrollbar-thumb { background: transparent; border-radius: 9999px; }
+.scrollbar-minimal:hover::-webkit-scrollbar-thumb { background: var(--border); }
+
+@keyframes aurora-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(6%, -8%) scale(1.12); }
+}
+@keyframes aurora-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-8%, 6%) scale(1.08); }
+}
+@keyframes aurora-drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(5%, 7%) scale(0.94); }
+}
+.animate-aurora-1 { animation: aurora-drift-1 20s ease-in-out infinite; }
+.animate-aurora-2 { animation: aurora-drift-2 24s ease-in-out infinite; }
+.animate-aurora-3 { animation: aurora-drift-3 28s ease-in-out infinite; }
+
+@keyframes saving-bar {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.animate-saving-bar { animation: saving-bar 1s ease-in-out infinite; }
