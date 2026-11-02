@@ -36,10 +36,11 @@ function guardarGrupoColapsado(title: string, colapsado: boolean) {
   }
 }
 
-function CollapsibleGroup({ title, items, coloresProyecto, children }: {
+function CollapsibleGroup({ title, items, coloresProyecto, destacado, children }: {
   title: string;
   items: TareaTrabajo[];
   coloresProyecto: Record<string, string>;
+  destacado?: boolean; // ej. el día de hoy cuando está agrupado por día: se nota con un fondo propio
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(() => !leerGruposColapsados()[title]);
@@ -50,13 +51,14 @@ function CollapsibleGroup({ title, items, coloresProyecto, children }: {
     return [...map.entries()];
   })();
   return (
-    <div className="pt-4">
+    <div className={`pt-4 pb-1 -mx-2 px-2 rounded-xl ${destacado ? 'bg-emerald-500/[0.06]' : ''}`}>
       <button
         onClick={toggle}
-        className="w-full flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)] mb-2 hover:text-[var(--text-primary)] transition-colors"
+        className={`w-full flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest mb-2 transition-colors ${destacado ? 'text-emerald-400' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         {title}
+        {destacado && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
         {!open && porProyecto.length > 0 && (
           <span className="flex items-center gap-1 normal-case tracking-normal font-normal">
             {porProyecto.map(([p, count]) => {
@@ -110,12 +112,17 @@ function horarioBadgeLineas(h: string): [string] | [string, string] {
   return [h];
 }
 
+const DIAS_JS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 function diaPorDefecto(): string {
-  const DIAS_JS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const ahora = new Date();
   let idx = ahora.getDay();
   if (ahora.getHours() >= 21) idx = (idx + 1) % 7;
   return DIAS_JS[idx];
+}
+// A diferencia de diaPorDefecto (que después de las 21h ya sugiere mañana para tareas nuevas),
+// este es el día de hoy tal cual, para resaltar su grupo mientras sigue siendo hoy.
+function diaDeHoy(): string {
+  return DIAS_JS[new Date().getDay()];
 }
 
 const PROYECTO_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
@@ -401,7 +408,13 @@ export default function TrabajoApp() {
         <>
           {groups.sueltos.length > 0 && <TrabajoRows {...rowsProps(groups.sueltos)} />}
           {groups.valores.map(v => (
-            <CollapsibleGroup key={v} title={v} items={groups.de(v)} coloresProyecto={coloresProyecto}>
+            <CollapsibleGroup
+              key={v}
+              title={v}
+              items={groups.de(v)}
+              coloresProyecto={coloresProyecto}
+              destacado={agruparPor === 'dia' && v === diaDeHoy()}
+            >
               <TrabajoRows {...rowsProps(groups.de(v))} />
             </CollapsibleGroup>
           ))}
