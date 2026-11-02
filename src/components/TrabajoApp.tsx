@@ -14,13 +14,36 @@ function applyReorder<T extends { id: number }>(all: T[], reordered: T[]): T[] {
   return all.map(item => (ids.has(item.id) ? reordered[idx++] : item));
 }
 
+// Si abierto/cerrado quedara solo en memoria, se perdía al recargar o volver a entrar. Se guarda
+// por nombre de grupo (ej. "Pendientes", o el valor de día/proyecto/estado/horario agrupado), con
+// abierto como default: solo hace falta anotar los que el usuario cerró a mano.
+const GRUPOS_COLAPSADOS_KEY = 'mt_grupos_colapsados';
+function leerGruposColapsados(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(GRUPOS_COLAPSADOS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+function guardarGrupoColapsado(title: string, colapsado: boolean) {
+  try {
+    const actual = leerGruposColapsados();
+    if (colapsado) actual[title] = true; else delete actual[title];
+    localStorage.setItem(GRUPOS_COLAPSADOS_KEY, JSON.stringify(actual));
+  } catch {
+    // localStorage no disponible, la preferencia no persiste pero no rompe nada
+  }
+}
+
 function CollapsibleGroup({ title, items, coloresProyecto, children }: {
   title: string;
   items: TareaTrabajo[];
   coloresProyecto: Record<string, string>;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(() => !leerGruposColapsados()[title]);
+  const toggle = () => setOpen(o => { guardarGrupoColapsado(title, o); return !o; });
   const porProyecto = (() => {
     const map = new Map<string, number>();
     items.forEach(it => { if (it.proyecto) map.set(it.proyecto, (map.get(it.proyecto) ?? 0) + 1); });
@@ -29,7 +52,7 @@ function CollapsibleGroup({ title, items, coloresProyecto, children }: {
   return (
     <div className="pt-4">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         className="w-full flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)] mb-2 hover:text-[var(--text-primary)] transition-colors"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
