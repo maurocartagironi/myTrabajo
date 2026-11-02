@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { GripVertical, Pencil, Trash2, Check, ChevronDown, ChevronRight, Plus, MessageSquare, Sun, Sunset, Moon } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowUp, ArrowDown, Pencil, Trash2, Check, ChevronDown, ChevronRight, Plus, Sun, Sunset, Moon } from 'lucide-react';
 import { useTrabajo } from '../context/TrabajoContext';
 import type { TareaTrabajo } from '../data/trabajo';
 import { nextId } from '../services/api';
@@ -8,81 +7,6 @@ import Modal, { Field, TextInput } from './Modal';
 
 const smallInputClass = 'w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 transition-colors';
 const textareaClass = 'w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 transition-colors resize-y';
-
-// Ícono con tooltip al hover, para notas cortas que no ameritan ocupar lugar fijo en la fila
-// (ej. "por qué está en espera").
-function NotaTooltip({ text }: { text: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  return (
-    <span className="relative inline-flex shrink-0">
-      <span
-        ref={ref}
-        onMouseEnter={() => {
-          if (!ref.current) return;
-          const r = ref.current.getBoundingClientRect();
-          setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 268)) });
-        }}
-        onMouseLeave={() => setPos(null)}
-        className="inline-flex items-center justify-center cursor-default text-amber-400"
-      >
-        <MessageSquare size={13} />
-      </span>
-      {pos && createPortal(
-        <div
-          className="pointer-events-none fixed z-[70] bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl shadow-2xl px-3 py-2 max-w-[260px] text-xs text-[var(--text-primary)] whitespace-pre-wrap"
-          style={{ top: pos.top, left: pos.left }}
-        >
-          {text}
-        </div>,
-        document.body
-      )}
-    </span>
-  );
-}
-
-function useReorder<T extends { id: number }>(items: T[], onChange: (next: T[]) => void) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef<number | null>(null);
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const [localItems, setLocalItems] = useState(items);
-
-  useEffect(() => { setLocalItems(items); }, [items]);
-
-  const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>, id: number) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    draggingRef.current = id;
-    setDraggingId(id);
-  };
-  const onPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const id = draggingRef.current;
-    if (id == null || !containerRef.current) return;
-    const rows = Array.from(containerRef.current.querySelectorAll<HTMLElement>('[data-row-id]'));
-    const overRow = rows.find(row => {
-      const rect = row.getBoundingClientRect();
-      return e.clientY >= rect.top && e.clientY <= rect.bottom;
-    });
-    if (!overRow) return;
-    const targetId = Number(overRow.dataset.rowId);
-    if (targetId === id) return;
-    setLocalItems(prev => {
-      const from = prev.findIndex(i => i.id === id);
-      const to = prev.findIndex(i => i.id === targetId);
-      if (from === -1 || to === -1) return prev;
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next;
-    });
-  };
-  const onPointerUp = () => {
-    if (draggingRef.current != null) onChange(localItems);
-    draggingRef.current = null;
-    setDraggingId(null);
-  };
-
-  return { containerRef, localItems, draggingId, onPointerDown, onPointerMove, onPointerUp };
-}
 
 function applyReorder<T extends { id: number }>(all: T[], reordered: T[]): T[] {
   const ids = new Set(reordered.map(i => i.id));
@@ -146,15 +70,13 @@ function CampoInput({ value, onChange, opciones, datalistId, placeholder }: {
   );
 }
 
-const ESTADOS_TRABAJO: { value: string; className: string; textColor: string }[] = [
-  { value: 'Pendiente', className: 'text-[var(--text-tertiary)] bg-[var(--bg-surface-hover)] border-[var(--border)]', textColor: 'text-[var(--text-tertiary)]' },
-  { value: 'En espera', className: 'text-orange-400 bg-orange-500/10 border-orange-500/30', textColor: 'text-orange-400' },
-  { value: 'En desarrollo', className: 'text-blue-400 bg-blue-500/10 border-blue-500/30', textColor: 'text-blue-400' },
-  { value: 'Bloqueado', className: 'text-red-400 bg-red-500/10 border-red-500/30', textColor: 'text-red-400' },
-  { value: 'Hecho', className: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30', textColor: 'text-emerald-400' },
+const ESTADOS_TRABAJO: { value: string; className: string }[] = [
+  { value: 'Pendiente', className: 'text-[var(--text-tertiary)] bg-[var(--bg-surface-hover)] border-[var(--border)]' },
+  { value: 'En espera', className: 'text-orange-400 bg-orange-500/10 border-orange-500/30' },
+  { value: 'En desarrollo', className: 'text-blue-400 bg-blue-500/10 border-blue-500/30' },
+  { value: 'Bloqueado', className: 'text-red-400 bg-red-500/10 border-red-500/30' },
+  { value: 'Hecho', className: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
 ];
-const estadoTextColor = (v?: string) =>
-  ESTADOS_TRABAJO.find(e => e.value === v)?.textColor ?? 'text-[var(--text-tertiary)]';
 const ORDEN_DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 const ORDEN_HORARIOS = ['Mañana', 'Tarde', 'Noche'];
@@ -204,20 +126,65 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
   ocultarCampo?: 'proyecto' | 'estado' | 'horario' | 'dia';
   coloresProyecto: Record<string, string>;
 }) {
-  const { containerRef, localItems, draggingId, onPointerDown, onPointerMove, onPointerUp } = useReorder(items, onReorder);
-  const ordenados = [...localItems].sort((a, b) => horarioRank(a.horario) - horarioRank(b.horario));
+  const ordenados = [...items].sort((a, b) => horarioRank(a.horario) - horarioRank(b.horario));
   const completar = (id: number, texto: string) => {
     if (window.confirm(`¿Marcar "${texto}" como completada? Se borra de la lista.`)) onDelete(id);
   };
+  // Mueve la tarea un lugar hacia arriba/abajo dentro del orden guardado (no del orden visual,
+  // que siempre reagrupa por horario) - con sort estable, eso alcanza para reordenar los
+  // empates (mismo horario, o ninguno) entre sí.
+  const mover = (id: number, dir: -1 | 1) => {
+    const idx = items.findIndex(i => i.id === id);
+    const destino = idx + dir;
+    if (idx === -1 || destino < 0 || destino >= items.length) return;
+    const next = [...items];
+    [next[idx], next[destino]] = [next[destino], next[idx]];
+    onReorder(next);
+  };
+
+  // El menú de acciones (completar/editar/borrar/mover) se abre haciendo click en la fila, en
+  // vez de aparecer solo al pasar el mouse - así funciona igual en touch que con mouse.
+  const [menuAbiertoId, setMenuAbiertoId] = useState<number | null>(null);
+  useEffect(() => {
+    if (menuAbiertoId == null) return;
+    const onClickOutside = (e: MouseEvent) => {
+      const rowEl = (e.target as HTMLElement).closest('[data-row-id]');
+      if (!rowEl || Number(rowEl.getAttribute('data-row-id')) !== menuAbiertoId) setMenuAbiertoId(null);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [menuAbiertoId]);
+
   return (
-    <div ref={containerRef} className="space-y-1.5">
+    <div>
       {ordenados.map(it => {
         const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
+        const estadoInfo = ESTADOS_TRABAJO.find(e => e.value === it.estado);
+
+        // Línea compacta tipo bullet: [Horario] - [Empresa] [Proyecto] - [Texto], con el estado
+        // como pill al final y, si hay nota, una segunda línea más chica debajo.
+        const empresaProyecto = (it.empresa || it.proyecto)
+          ? <>
+              {it.empresa && <span className="font-bold text-[var(--text-primary)]">{it.empresa}</span>}
+              {it.empresa && it.proyecto && ' '}
+              {it.proyecto && <span className="font-bold" style={{ color: colorProy }}>{it.proyecto}</span>}
+            </>
+          : null;
+        const segmentos = [
+          empresaProyecto,
+          <span className="text-[var(--text-secondary)]">
+            {it.us && <span className="font-bold">{it.us}</span>}
+            {it.us ? ' - ' : ''}{it.texto}
+          </span>,
+          it.dia && ocultarCampo !== 'dia' ? <span className="text-[var(--text-tertiary)]">{it.dia}</span> : null,
+        ].filter(Boolean);
+
         return (
           <div
             key={it.id}
             data-row-id={it.id}
-            className={`flex items-start gap-2 p-2 bg-[var(--bg-surface-sunken)] border rounded-lg group ${draggingId === it.id ? 'border-emerald-500/60' : 'border-[var(--border)]'}`}
+            onClick={() => setMenuAbiertoId(id => (id === it.id ? null : it.id))}
+            className={`relative flex ${it.notas ? 'items-start' : 'items-center'} gap-1.5 px-1 -mx-1 py-0.5 rounded cursor-pointer hover:bg-[var(--bg-surface-hover)] transition-colors`}
           >
             <span
               className={`shrink-0 w-6 h-6 rounded flex flex-col items-center justify-center font-bold overflow-hidden ${
@@ -233,53 +200,61 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
                     ))
               )}
             </span>
-            <div className="flex-1 min-w-0 border-l-2 pl-2" style={{ borderColor: colorProy ?? 'var(--border)' }}>
-              <div className="flex items-center gap-1 min-w-0">
-                <p className="text-sm text-[var(--text-primary)] truncate min-w-0">
-                  {it.us ? `${it.us} - ` : ''}{it.texto}
-                </p>
-                {it.notas && <span className="shrink-0 -translate-y-px"><NotaTooltip text={it.notas} /></span>}
-              </div>
-              {(() => {
-                const partes: { key: string; node: React.ReactNode }[] = [];
-                if (it.estado && ocultarCampo !== 'estado') partes.push({ key: 'estado', node: <span className={`font-semibold ${estadoTextColor(it.estado)}`}>{it.estado}</span> });
-                if (it.empresa) partes.push({ key: 'empresa', node: <span>{it.empresa}</span> });
-                if (it.proyecto) partes.push({ key: 'proyecto', node: <span style={{ color: colorProy }}>{it.proyecto}</span> });
-                if (it.dia && ocultarCampo !== 'dia') partes.push({ key: 'dia', node: <span>{it.dia}</span> });
-                if (partes.length === 0) return null;
-                return (
-                  <p className="flex items-center gap-1 flex-wrap text-[11px] text-[var(--text-tertiary)] mt-0.5">
-                    {partes.map((p, i) => (
-                      <span key={p.key} className="flex items-center gap-1">
-                        {i > 0 && <span>·</span>}
-                        {p.node}
-                      </span>
-                    ))}
-                  </p>
-                );
-              })()}
+            <div className="flex-1 min-w-0">
+              <p className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[13px] leading-5">
+                <span className="min-w-0">
+                  {segmentos.map((seg, i) => (
+                    <span key={i}>
+                      {i > 0 && <span className="text-[var(--text-tertiary)] px-1">·</span>}
+                      {seg}
+                    </span>
+                  ))}
+                </span>
+                {estadoInfo && ocultarCampo !== 'estado' && (
+                  <span className={`shrink-0 text-[8px] font-bold uppercase leading-none px-1 py-0.5 rounded-full border ${estadoInfo.className}`}>
+                    {estadoInfo.value}
+                  </span>
+                )}
+              </p>
+              {it.notas && <p className="text-[11px] text-[var(--text-tertiary)] leading-tight">{it.notas}</p>}
             </div>
-            <div className="hidden group-hover:flex items-center gap-1 shrink-0">
-              <button onClick={() => completar(it.id, it.texto)} className="text-[var(--text-tertiary)] hover:text-emerald-400 transition-colors" aria-label="Marcar completada" title="Marcar completada">
-                <Check size={14} />
-              </button>
-              <button onClick={() => onEdit(it.id)} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors" aria-label="Editar">
-                <Pencil size={14} />
-              </button>
-              <button onClick={() => onDelete(it.id)} className="text-[var(--text-tertiary)] hover:text-red-400 transition-colors" aria-label="Borrar">
-                <Trash2 size={14} />
-              </button>
-              <button
-                onPointerDown={e => onPointerDown(e, it.id)}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={onPointerUp}
-                className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-grab active:cursor-grabbing touch-none"
-                aria-label="Mover"
+            {menuAbiertoId === it.id && (
+              <div
+                onClick={e => e.stopPropagation()}
+                className="absolute right-0 top-full mt-1 z-20 w-40 bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg shadow-xl overflow-hidden cursor-default"
               >
-                <GripVertical size={14} />
-              </button>
-            </div>
+                <button
+                  onClick={() => { completar(it.id, it.texto); setMenuAbiertoId(null); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors"
+                >
+                  <Check size={13} className="text-emerald-400" /> Marcar completada
+                </button>
+                <button
+                  onClick={() => { onEdit(it.id); setMenuAbiertoId(null); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors"
+                >
+                  <Pencil size={13} /> Editar
+                </button>
+                <button
+                  onClick={() => { onDelete(it.id); setMenuAbiertoId(null); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-[var(--bg-surface-hover)] transition-colors"
+                >
+                  <Trash2 size={13} /> Borrar
+                </button>
+                <button
+                  onClick={() => { mover(it.id, -1); setMenuAbiertoId(null); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors"
+                >
+                  <ArrowUp size={13} /> Subir
+                </button>
+                <button
+                  onClick={() => { mover(it.id, 1); setMenuAbiertoId(null); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-surface-hover)] transition-colors"
+                >
+                  <ArrowDown size={13} /> Bajar
+                </button>
+              </div>
+            )}
           </div>
         );
       })}
