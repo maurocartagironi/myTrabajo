@@ -177,7 +177,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
             key={it.id}
             data-row-id={it.id}
             onClick={() => setMenuAbiertoId(id => (id === it.id ? null : it.id))}
-            className={`relative flex ${it.notas ? 'items-start' : 'items-center'} gap-1.5 px-1 -mx-1 py-0.5 rounded cursor-pointer hover:bg-[var(--bg-surface-hover)] transition-colors`}
+            className="relative flex items-center gap-1.5 px-1 -mx-1 py-0.5 rounded cursor-pointer hover:bg-[var(--bg-surface-hover)] transition-colors"
           >
             <span
               className={`shrink-0 w-6 h-6 rounded flex flex-col items-center justify-center font-bold overflow-hidden ${
