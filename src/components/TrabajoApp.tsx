@@ -41,7 +41,7 @@ function CollapsibleGroup({ title, items, coloresProyecto, children }: {
               return (
                 <span
                   key={p}
-                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                  className="text-[0.625rem] font-bold px-1.5 py-0.5 rounded-full"
                   style={{ backgroundColor: `${color}33`, color }}
                   title={p}
                 >
@@ -189,12 +189,12 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
                 ICONO_HORARIO[it.horario]
                   ? (() => { const Icono = ICONO_HORARIO[it.horario]; return <Icono size={13} />; })()
                   : horarioBadgeLineas(it.horario).map((linea, i, arr) => (
-                      <span key={i} className={arr.length === 2 ? 'text-[9px] leading-[9px]' : 'text-xs leading-none'}>{linea}</span>
+                      <span key={i} className={arr.length === 2 ? 'text-[0.5625rem] leading-[0.5625rem]' : 'text-xs leading-none'}>{linea}</span>
                     ))
               )}
             </span>
             <div className="flex-1 min-w-0">
-              <p className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[13px] leading-5">
+              <p className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[0.8125rem] leading-5">
                 <span className="min-w-0">
                   {segmentos.map((seg, i) => (
                     <span key={i}>
@@ -204,12 +204,12 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
                   ))}
                 </span>
                 {estadoInfo && ocultarCampo !== 'estado' && (
-                  <span className={`shrink-0 text-[8px] font-bold uppercase leading-none px-1 py-0.5 rounded-full border ${estadoInfo.className}`}>
+                  <span className={`shrink-0 text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border ${estadoInfo.className}`}>
                     {estadoInfo.value}
                   </span>
                 )}
               </p>
-              {it.notas && <p className="text-[11px] text-[var(--text-tertiary)] leading-tight">{it.notas}</p>}
+              {it.notas && <p className="text-[0.6875rem] text-[var(--text-tertiary)] leading-tight">{it.notas}</p>}
             </div>
             {menuAbiertoId === it.id && (
               <div

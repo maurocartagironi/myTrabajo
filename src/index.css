@@ -38,6 +38,13 @@
 [data-theme="light"] .text-blue-300,
 [data-theme="light"] .text-blue-400 { color: #2563eb; }
 
+/* Tamaño de letra elegido en Configuración: al ser el font-size del html, escala con él todo
+   lo que esté en rem (los tamaños propios de Tailwind y los que usa TrabajoApp), sin tocar los
+   íconos (que usan tamaño fijo en px). "Small" es el tamaño de siempre (100%). */
+html[data-font-size="medium"] { font-size: 112%; }
+html[data-font-size="large"]  { font-size: 125%; }
+html[data-font-size="xlarge"] { font-size: 140%; }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   background: var(--bg-app);
