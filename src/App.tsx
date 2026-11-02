@@ -5,7 +5,6 @@ import AuthGate from './components/AuthGate';
 import SavingIndicator from './components/SavingIndicator';
 import Header from './components/Header';
 import TrabajoApp from './components/TrabajoApp';
-import ImportarMyFinanzas from './components/ImportarMyFinanzas';
 import { ServerCrash } from 'lucide-react';
 
 function ServerOffline() {
@@ -42,7 +41,6 @@ function AppInner() {
     <div className="min-h-screen bg-[var(--bg-app)]">
       <SavingIndicator />
       <Header />
-      <ImportarMyFinanzas />
       <TrabajoApp />
     </div>
   );
