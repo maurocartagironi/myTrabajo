@@ -138,22 +138,28 @@ function periodoDeHora(hour: number): string {
   if (hour >= 12 && hour < 19) return 'Tarde';
   return 'Noche';
 }
-// Cuál(es) tarea(s) de hoy representan "ahora": primero la de hora puntual más próxima que
-// todavía no pasó (si hay varias a la misma hora, todas); si ninguna califica (todas las horas
-// puntuales ya pasaron, o no hay ninguna), cae a lo genérico (Mañana/Tarde/Noche) según el
-// momento del día actual.
-function idsTareaActualHoy(tareasHoy: TareaTrabajo[]): Set<number> {
+// A qué período cae una tarea: el suyo propio si es genérico ("Mañana"/"Tarde"/"Noche"), o el
+// que le corresponde a su hora puntual (ej. "16:00" cae en "Tarde").
+function periodoDeHorario(h?: string): string | null {
+  if (!h) return null;
+  const min = horarioAMinutos(h);
+  if (min != null) return periodoDeHora(Math.floor(min / 60));
+  return h === 'Mañana' || h === 'Tarde' || h === 'Noche' ? h : null;
+}
+// Resalta todas las tareas de hoy que caen en el período actual (ej. toda la tarde), y entre
+// esas, marca más fuerte la que tiene una hora puntual y esa hora ya llegó (ej. son las 16:xx y
+// hay una tarea a las 16:00).
+function resaltadoTareaActualHoy(tareasHoy: TareaTrabajo[]): Map<number, 'fuerte' | 'suave'> {
   const ahora = new Date();
-  const ahoraMin = ahora.getHours() * 60 + ahora.getMinutes();
-  const conHoraFutura = tareasHoy
-    .map(t => ({ t, min: horarioAMinutos(t.horario) }))
-    .filter((x): x is { t: TareaTrabajo; min: number } => x.min != null && x.min >= ahoraMin);
-  if (conHoraFutura.length > 0) {
-    const minProximo = Math.min(...conHoraFutura.map(x => x.min));
-    return new Set(conHoraFutura.filter(x => x.min === minProximo).map(x => x.t.id));
+  const periodoActual = periodoDeHora(ahora.getHours());
+  const mapa = new Map<number, 'fuerte' | 'suave'>();
+  for (const t of tareasHoy) {
+    if (periodoDeHorario(t.horario) !== periodoActual) continue;
+    const min = horarioAMinutos(t.horario);
+    const esHoraActual = min != null && Math.floor(min / 60) === ahora.getHours();
+    mapa.set(t.id, esHoraActual ? 'fuerte' : 'suave');
   }
-  const periodo = periodoDeHora(ahora.getHours());
-  return new Set(tareasHoy.filter(t => t.horario === periodo).map(t => t.id));
+  return mapa;
 }
 
 const PROYECTO_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
@@ -183,7 +189,7 @@ function groupByField<T>(items: T[], campo: (item: T) => string | undefined, ord
   return { sueltos, valores, de: (v: string) => items.filter(i => campo(i) === v) };
 }
 
-function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, coloresProyecto, coloresEstado, idsActuales }: {
+function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, coloresProyecto, coloresEstado, resaltadoActual }: {
   items: TareaTrabajo[];
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
@@ -191,7 +197,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
   ocultarCampo?: 'proyecto' | 'estado' | 'horario' | 'dia';
   coloresProyecto: Record<string, string>;
   coloresEstado: Record<string, string>;
-  idsActuales: Set<number>;
+  resaltadoActual: Map<number, 'fuerte' | 'suave'>;
 }) {
   const completar = (id: number, texto: string) => {
     if (window.confirm(`¿Marcar "${texto}" como completada? Se borra de la lista.`)) onDelete(id);
@@ -328,7 +334,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
           it.dia && ocultarCampo !== 'dia' ? <span className="text-[var(--text-tertiary)]">{it.dia}</span> : null,
         ].filter(Boolean);
 
-        const esActual = idsActuales.has(it.id);
+        const nivelActual = resaltadoActual.get(it.id);
 
         return (
           <div
@@ -342,7 +348,11 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
             className={`relative flex items-center gap-1.5 px-1 -mx-1 py-0.5 rounded select-none transition-colors ${
               draggingId === it.id
                 ? 'cursor-grabbing bg-[var(--bg-surface-hover)] shadow-lg ring-1 ring-emerald-500/40 z-10'
-                : `cursor-pointer hover:bg-[var(--bg-surface-hover)] ${esActual ? 'bg-blue-500/[0.07]' : ''}`
+                : nivelActual === 'fuerte'
+                ? 'cursor-pointer bg-blue-500/[0.14] ring-1 ring-blue-500/30 hover:bg-blue-500/[0.18]'
+                : nivelActual === 'suave'
+                ? 'cursor-pointer bg-blue-500/[0.06] hover:bg-[var(--bg-surface-hover)]'
+                : 'cursor-pointer hover:bg-[var(--bg-surface-hover)]'
             }`}
           >
             <span
@@ -512,9 +522,10 @@ export default function TrabajoApp() {
     agruparPor === 'dia' ? (it.dia || diaPorDefecto()) : agruparPor === 'proyecto' ? it.proyecto : agruparPor === 'estado' ? it.estado : agruparPor === 'horario' ? it.horario : undefined;
   const groups = agruparPor === 'ninguno' ? null : groupByField(resto, campoActivo, agruparPor === 'dia' ? ORDEN_DIAS : undefined);
 
-  // Qué tarea(s) de hoy representan "ahora", para resaltarlas con un fondo distinto - se
-  // recalcula solo (vía tickDia) a medida que pasa el tiempo, sin recargar la página.
-  const idsActuales = idsTareaActualHoy(items.filter(i => i.dia === diaDeHoy()));
+  // Qué tarea(s) de hoy caen en el período actual (resaltado suave) o en la hora puntual actual
+  // (resaltado fuerte) - se recalcula solo (vía tickDia) a medida que pasa el tiempo, sin
+  // recargar la página.
+  const resaltadoActual = resaltadoTareaActualHoy(items.filter(i => i.dia === diaDeHoy()));
 
   const rowsProps = (lista: TareaTrabajo[]) => ({
     items: lista,
@@ -524,7 +535,7 @@ export default function TrabajoApp() {
     ocultarCampo: agruparPor === 'ninguno' ? undefined : agruparPor,
     coloresProyecto,
     coloresEstado,
-    idsActuales,
+    resaltadoActual,
   });
 
   return (
