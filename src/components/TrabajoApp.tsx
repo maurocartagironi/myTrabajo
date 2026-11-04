@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, ArrowDown, Pencil, Trash2, Check, ChevronDown, ChevronRight, Plus, Sun, Sunset, Moon } from 'lucide-react';
 import { useTrabajo } from '../context/TrabajoContext';
 import type { TareaTrabajo } from '../data/trabajo';
@@ -166,6 +166,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
   };
   // Mueve la tarea un lugar hacia arriba/abajo dentro del grupo. El orden se muestra tal cual
   // está guardado (ya no se reordena solo por horario), así que esto mueve la fila de verdad.
+  // Sirve para ajustes finos de a un lugar; para mover algo lejos está el arrastre de abajo.
   const mover = (id: number, dir: -1 | 1) => {
     const idx = items.findIndex(i => i.id === id);
     const destino = idx + dir;
@@ -175,9 +176,23 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
     onReorder(next);
   };
 
-  // El menú de acciones (completar/editar/borrar/mover) se abre haciendo click en la fila, en
-  // vez de aparecer solo al pasar el mouse - así funciona igual en touch que con mouse.
+  // El menú de acciones (completar/editar/borrar/mover) se abre haciendo click/tap corto en la
+  // fila. Si en cambio se mantiene apretado, la fila entra en modo arrastre: igual que al tocar
+  // para abrir el menú, pero sostenido, se convierte en "tomar y mover" - así no hace falta abrir
+  // nada para reordenar lejos, ni un botón de arrastre aparte.
   const [menuAbiertoId, setMenuAbiertoId] = useState<number | null>(null);
+  const [localItems, setLocalItems] = useState(items);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const startPosRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressRef = useRef(false);
+  const LONG_PRESS_MS = 350;
+  const MOVE_CANCEL_PX = 6;
+
+  useEffect(() => { if (draggingRef.current == null) setLocalItems(items); }, [items]);
+
   useEffect(() => {
     if (menuAbiertoId == null) return;
     const onClickOutside = (e: MouseEvent) => {
@@ -188,9 +203,77 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, [menuAbiertoId]);
 
+  const clearLongPressTimer = () => {
+    if (timerRef.current != null) { window.clearTimeout(timerRef.current); timerRef.current = null; }
+  };
+
+  const onRowPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: number) => {
+    if ((e.target as HTMLElement).closest('[data-menu]')) return;
+    startPosRef.current = { x: e.clientX, y: e.clientY };
+    longPressRef.current = false;
+    clearLongPressTimer();
+    const target = e.currentTarget;
+    const pointerId = e.pointerId;
+    timerRef.current = window.setTimeout(() => {
+      longPressRef.current = true;
+      draggingRef.current = id;
+      setDraggingId(id);
+      try { target.setPointerCapture(pointerId); } catch { /* ignore */ }
+    }, LONG_PRESS_MS);
+  };
+
+  const onRowPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const id = draggingRef.current;
+    if (id == null) {
+      if (startPosRef.current) {
+        const dx = e.clientX - startPosRef.current.x;
+        const dy = e.clientY - startPosRef.current.y;
+        if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) clearLongPressTimer();
+      }
+      return;
+    }
+    if (!containerRef.current) return;
+    const rows = Array.from(containerRef.current.querySelectorAll<HTMLElement>('[data-row-id]'));
+    const overRow = rows.find(row => {
+      const rect = row.getBoundingClientRect();
+      return e.clientY >= rect.top && e.clientY <= rect.bottom;
+    });
+    if (!overRow) return;
+    const targetId = Number(overRow.dataset.rowId);
+    if (targetId === id) return;
+    setLocalItems(prev => {
+      const from = prev.findIndex(i => i.id === id);
+      const to = prev.findIndex(i => i.id === targetId);
+      if (from === -1 || to === -1) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  };
+
+  const onRowPointerUp = (e: React.PointerEvent<HTMLDivElement>, id: number) => {
+    if ((e.target as HTMLElement).closest('[data-menu]')) return;
+    clearLongPressTimer();
+    if (draggingRef.current != null) {
+      draggingRef.current = null;
+      setDraggingId(null);
+      onReorder(localItems);
+    } else if (!longPressRef.current) {
+      setMenuAbiertoId(m => (m === id ? null : id));
+    }
+  };
+
+  const onRowPointerCancel = () => {
+    clearLongPressTimer();
+    draggingRef.current = null;
+    setDraggingId(null);
+    setLocalItems(items);
+  };
+
   return (
-    <div>
-      {items.map(it => {
+    <div ref={containerRef}>
+      {localItems.map(it => {
         const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
         const estadoInfo = ESTADOS_TRABAJO.find(e => e.value === it.estado);
         const colorEstadoCustom = it.estado && !estadoInfo ? colorDeEstado(it.estado, coloresEstado) : undefined;
@@ -217,8 +300,16 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
           <div
             key={it.id}
             data-row-id={it.id}
-            onClick={() => setMenuAbiertoId(id => (id === it.id ? null : it.id))}
-            className="relative flex items-center gap-1.5 px-1 -mx-1 py-0.5 rounded cursor-pointer hover:bg-[var(--bg-surface-hover)] transition-colors"
+            onPointerDown={e => onRowPointerDown(e, it.id)}
+            onPointerMove={onRowPointerMove}
+            onPointerUp={e => onRowPointerUp(e, it.id)}
+            onPointerCancel={onRowPointerCancel}
+            style={{ touchAction: draggingId === it.id ? 'none' : 'pan-y' }}
+            className={`relative flex items-center gap-1.5 px-1 -mx-1 py-0.5 rounded select-none transition-colors ${
+              draggingId === it.id
+                ? 'cursor-grabbing bg-[var(--bg-surface-hover)] shadow-lg ring-1 ring-emerald-500/40 z-10'
+                : 'cursor-pointer hover:bg-[var(--bg-surface-hover)]'
+            }`}
           >
             <span
               className={`shrink-0 w-6 h-6 rounded flex flex-col items-center justify-center font-bold overflow-hidden ${
@@ -263,6 +354,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
             </div>
             {menuAbiertoId === it.id && (
               <div
+                data-menu
                 onClick={e => e.stopPropagation()}
                 className="absolute right-0 top-full mt-1 z-20 w-40 bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg shadow-xl overflow-hidden cursor-default"
               >
