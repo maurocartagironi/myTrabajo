@@ -3,7 +3,7 @@ import { ArrowUp, ArrowDown, Pencil, Trash2, Check, ChevronDown, ChevronRight, P
 import { useTrabajo } from '../context/TrabajoContext';
 import type { TareaTrabajo } from '../data/trabajo';
 import { nextId } from '../services/api';
-import Modal, { Field, TextInput } from './Modal';
+import Modal, { Field, TextInput, SelectInput } from './Modal';
 
 const smallInputClass = 'w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 transition-colors';
 const textareaClass = 'w-full bg-[var(--bg-surface-hover)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-slate-600 focus:outline-none focus:border-emerald-500/50 transition-colors resize-y';
@@ -125,6 +125,37 @@ function diaDeHoy(): string {
   return DIAS_JS[new Date().getDay()];
 }
 
+// Minutos desde medianoche si el horario es una hora puntual tipo "16:00", o null si es
+// "Mañana"/"Tarde"/"Noche" (o no tiene horario).
+function horarioAMinutos(h?: string): number | null {
+  if (!h) return null;
+  const m = h.match(/^(\d{1,2}):(\d{2})$/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+// Mismos tramos que separan el día en Mañana/Tarde/Noche, para saber en cuál estamos ahora.
+function periodoDeHora(hour: number): string {
+  if (hour >= 5 && hour < 12) return 'Mañana';
+  if (hour >= 12 && hour < 19) return 'Tarde';
+  return 'Noche';
+}
+// Cuál(es) tarea(s) de hoy representan "ahora": primero la de hora puntual más próxima que
+// todavía no pasó (si hay varias a la misma hora, todas); si ninguna califica (todas las horas
+// puntuales ya pasaron, o no hay ninguna), cae a lo genérico (Mañana/Tarde/Noche) según el
+// momento del día actual.
+function idsTareaActualHoy(tareasHoy: TareaTrabajo[]): Set<number> {
+  const ahora = new Date();
+  const ahoraMin = ahora.getHours() * 60 + ahora.getMinutes();
+  const conHoraFutura = tareasHoy
+    .map(t => ({ t, min: horarioAMinutos(t.horario) }))
+    .filter((x): x is { t: TareaTrabajo; min: number } => x.min != null && x.min >= ahoraMin);
+  if (conHoraFutura.length > 0) {
+    const minProximo = Math.min(...conHoraFutura.map(x => x.min));
+    return new Set(conHoraFutura.filter(x => x.min === minProximo).map(x => x.t.id));
+  }
+  const periodo = periodoDeHora(ahora.getHours());
+  return new Set(tareasHoy.filter(t => t.horario === periodo).map(t => t.id));
+}
+
 const PROYECTO_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
 function colorHashDeProyecto(nombre: string): string {
   let hash = 0;
@@ -152,7 +183,7 @@ function groupByField<T>(items: T[], campo: (item: T) => string | undefined, ord
   return { sueltos, valores, de: (v: string) => items.filter(i => campo(i) === v) };
 }
 
-function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, coloresProyecto, coloresEstado }: {
+function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, coloresProyecto, coloresEstado, idsActuales }: {
   items: TareaTrabajo[];
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
@@ -160,6 +191,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
   ocultarCampo?: 'proyecto' | 'estado' | 'horario' | 'dia';
   coloresProyecto: Record<string, string>;
   coloresEstado: Record<string, string>;
+  idsActuales: Set<number>;
 }) {
   const completar = (id: number, texto: string) => {
     if (window.confirm(`¿Marcar "${texto}" como completada? Se borra de la lista.`)) onDelete(id);
@@ -296,6 +328,8 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
           it.dia && ocultarCampo !== 'dia' ? <span className="text-[var(--text-tertiary)]">{it.dia}</span> : null,
         ].filter(Boolean);
 
+        const esActual = idsActuales.has(it.id);
+
         return (
           <div
             key={it.id}
@@ -308,7 +342,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
             className={`relative flex items-center gap-1.5 px-1 -mx-1 py-0.5 rounded select-none transition-colors ${
               draggingId === it.id
                 ? 'cursor-grabbing bg-[var(--bg-surface-hover)] shadow-lg ring-1 ring-emerald-500/40 z-10'
-                : 'cursor-pointer hover:bg-[var(--bg-surface-hover)]'
+                : `cursor-pointer hover:bg-[var(--bg-surface-hover)] ${esActual ? 'bg-blue-500/[0.07]' : ''}`
             }`}
           >
             <span
@@ -477,6 +511,11 @@ export default function TrabajoApp() {
   const campoActivo = (it: TareaTrabajo) =>
     agruparPor === 'dia' ? (it.dia || diaPorDefecto()) : agruparPor === 'proyecto' ? it.proyecto : agruparPor === 'estado' ? it.estado : agruparPor === 'horario' ? it.horario : undefined;
   const groups = agruparPor === 'ninguno' ? null : groupByField(resto, campoActivo, agruparPor === 'dia' ? ORDEN_DIAS : undefined);
+
+  // Qué tarea(s) de hoy representan "ahora", para resaltarlas con un fondo distinto - se
+  // recalcula solo (vía tickDia) a medida que pasa el tiempo, sin recargar la página.
+  const idsActuales = idsTareaActualHoy(items.filter(i => i.dia === diaDeHoy()));
+
   const rowsProps = (lista: TareaTrabajo[]) => ({
     items: lista,
     onEdit: openEdit,
@@ -485,6 +524,7 @@ export default function TrabajoApp() {
     ocultarCampo: agruparPor === 'ninguno' ? undefined : agruparPor,
     coloresProyecto,
     coloresEstado,
+    idsActuales,
   });
 
   return (
@@ -654,7 +694,10 @@ export default function TrabajoApp() {
               <CampoInput value={form.horario} onChange={c => setForm(f => ({ ...f, horario: c }))} opciones={horarios} datalistId="trabajo-horarios" placeholder="Horario" />
             </Field>
             <Field label="Día (opcional)">
-              <CampoInput value={form.dia} onChange={c => setForm(f => ({ ...f, dia: c }))} opciones={[...ORDEN_DIAS, ...dias.filter(d => !ORDEN_DIAS.includes(d))]} datalistId="trabajo-dias" placeholder="Día" />
+              <SelectInput value={form.dia} onChange={e => setForm(f => ({ ...f, dia: e.target.value }))}>
+                <option value="">Sin día</option>
+                {[...ORDEN_DIAS, ...dias.filter(d => !ORDEN_DIAS.includes(d))].map(d => <option key={d} value={d}>{d}</option>)}
+              </SelectInput>
             </Field>
           </div>
           <Field label="Notas (opcional, ej. por qué está en espera)">

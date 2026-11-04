@@ -94,3 +94,7 @@ const inputClass = 'w-full bg-[var(--bg-surface-hover)] border border-[var(--bor
 export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={inputClass} />;
 }
+
+export function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select {...props} className={inputClass + ' cursor-pointer'} />;
+}
