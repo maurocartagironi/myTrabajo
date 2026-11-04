@@ -404,6 +404,26 @@ export default function TrabajoApp() {
   const { data, updateData } = useTrabajo();
   const items = data.tareas;
   const onChange = (next: TareaTrabajo[]) => updateData({ tareas: next });
+
+  // Si quedó alguna tarea con un día ya pasado esta semana (ej. hoy es miércoles y quedó algo en
+  // "Martes"), se migra sola al día de hoy - así no queda nunca una tarea perdida en un día viejo
+  // que ya no se vuelve a mostrar agrupado. Se revisa al cargar, cada vez que cambian las tareas,
+  // y cada un rato por si la pestaña queda abierta y cambia el día mientras tanto.
+  const [tickDia, setTickDia] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTickDia(t => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    const hoy = diaDeHoy();
+    const hoyIdx = ORDEN_DIAS.indexOf(hoy);
+    if (hoyIdx === -1) return;
+    const aMigrar = items.filter(i => i.dia && ORDEN_DIAS.includes(i.dia) && ORDEN_DIAS.indexOf(i.dia) < hoyIdx);
+    if (aMigrar.length === 0) return;
+    const idsAMigrar = new Set(aMigrar.map(i => i.id));
+    onChange(items.map(i => (idsAMigrar.has(i.id) ? { ...i, dia: hoy } : i)));
+  }, [items, tickDia]);
+
   const coloresProyecto = data.coloresProyecto;
   const setColorProyecto = (proyecto: string, color: string) => updateData({ coloresProyecto: { ...coloresProyecto, [proyecto]: color } });
   const coloresEstado = data.coloresEstado;
