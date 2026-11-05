@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { trabajoDefault, type TrabajoData } from '../data/trabajo';
-import { fetchData, saveData } from '../services/api';
+import { fetchData, saveData, subscribeData } from '../services/api';
 
 interface TrabajoContextType {
   data: TrabajoData;
@@ -28,6 +28,18 @@ export function TrabajoProvider({ children }: { children: ReactNode }) {
       .catch(() => setServerOk(false))
       .finally(() => setLoading(false));
   }, []);
+
+  // Escucha cambios en tiempo real una vez que hay datos cargados, para que un guardado hecho
+  // desde otra pestaña o dispositivo (misma cuenta) se vea reflejado acá sin tener que refrescar
+  // la página. subscribeData ya filtra el eco del propio guardado de esta pestaña (ver api.ts).
+  useEffect(() => {
+    if (!serverOk) return;
+    const unsubscribe = subscribeData(
+      remoto => setData({ ...trabajoDefault, ...remoto }),
+      () => { /* si falla la suscripción, se sigue usando el último dato conocido */ },
+    );
+    return unsubscribe;
+  }, [serverOk]);
 
   const updateData = useCallback(async (patch: Partial<TrabajoData>) => {
     const final = { ...data, ...patch };

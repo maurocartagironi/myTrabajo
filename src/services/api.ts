@@ -1,6 +1,6 @@
 import type { TrabajoData } from '../data/trabajo';
 import { auth, db } from './firebase';
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot } from 'firebase/firestore';
 
 function requireUid(): string {
   const uid = auth.currentUser?.uid;
@@ -14,6 +14,22 @@ const backupsCol = () => collection(db, 'users', requireUid(), 'trabajo', 'data'
 export async function fetchData(): Promise<TrabajoData> {
   const snap = await getDoc(dataDocRef());
   return (snap.exists() ? snap.data() : {}) as TrabajoData;
+}
+
+// Escucha los datos en tiempo real (en vez de leerlos una sola vez), para que un cambio hecho
+// en otra pestaña/dispositivo con la misma cuenta se vea reflejado sin tener que refrescar la
+// página. Se ignoran los eventos "hasPendingWrites" (el eco inmediato de lo que esta misma
+// pestaña acaba de guardar, todavía no confirmado por el servidor) porque ese cambio ya se ve
+// reflejado al instante en el estado local (guardado optimista).
+export function subscribeData(onData: (data: TrabajoData) => void, onError: (e: unknown) => void): () => void {
+  return onSnapshot(
+    dataDocRef(),
+    snap => {
+      if (snap.metadata.hasPendingWrites) return;
+      onData((snap.exists() ? snap.data() : {}) as TrabajoData);
+    },
+    onError,
+  );
 }
 
 // Firestore tira un error y no guarda NADA si cualquier campo, en cualquier nivel, tiene el
