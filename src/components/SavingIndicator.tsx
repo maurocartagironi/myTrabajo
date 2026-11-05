@@ -12,7 +12,7 @@ export default function SavingIndicator() {
   return (
     <>
       <div className="fixed inset-0 z-[150] bg-black/30" />
-      <div className="fixed top-0 left-0 right-0 z-[200] h-[3px] bg-[#1a1d27] overflow-hidden pointer-events-none">
+      <div className="fixed top-0 left-0 right-0 z-[200] h-[3px] overflow-hidden pointer-events-none">
         <div className="h-full w-1/3 bg-emerald-400 animate-saving-bar" />
       </div>
     </>
