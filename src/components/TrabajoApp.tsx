@@ -332,6 +332,11 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
           <span className="text-[var(--text-secondary)]">
             {it.us && <span className="font-bold">{it.us}</span>}
             {it.us ? ' - ' : ''}{it.texto}
+            {it.esBug && (
+              <span className="ml-1.5 align-middle text-[0.5625rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full bg-slate-500/15 text-slate-300 border border-slate-500/30">
+                Bug
+              </span>
+            )}
           </span>,
           it.dia && ocultarCampo !== 'dia' ? <span className="text-[var(--text-tertiary)]">{it.dia}</span> : null,
         ].filter(Boolean);
@@ -490,15 +495,15 @@ export default function TrabajoApp() {
 
   const [agruparPor, setAgruparPor] = useState<'dia' | 'proyecto' | 'estado' | 'horario' | 'ninguno'>('dia');
   const [modal, setModal] = useState<{ mode: 'add' } | { mode: 'edit'; id: number } | null>(null);
-  const [form, setForm] = useState({ texto: '', proyecto: '', empresa: '', us: '', estado: '', horario: '', dia: '', notas: '' });
+  const [form, setForm] = useState({ texto: '', proyecto: '', empresa: '', us: '', estado: '', horario: '', dia: '', notas: '', esBug: false });
   const [colorEnEleccion, setColorEnEleccion] = useState<string | null>(null);
   const [colorEstadoEnEleccion, setColorEstadoEnEleccion] = useState<string | null>(null);
 
-  const openAdd = () => { setForm({ texto: '', proyecto: '', empresa: '', us: '', estado: '', horario: '', dia: '', notas: '' }); setModal({ mode: 'add' }); };
+  const openAdd = () => { setForm({ texto: '', proyecto: '', empresa: '', us: '', estado: '', horario: '', dia: '', notas: '', esBug: false }); setModal({ mode: 'add' }); };
   const openEdit = (id: number) => {
     const it = items.find(i => i.id === id);
     if (!it) return;
-    setForm({ texto: it.texto, proyecto: it.proyecto ?? '', empresa: it.empresa ?? '', us: it.us ?? '', estado: it.estado ?? '', horario: it.horario ?? '', dia: it.dia ?? '', notas: it.notas ?? '' });
+    setForm({ texto: it.texto, proyecto: it.proyecto ?? '', empresa: it.empresa ?? '', us: it.us ?? '', estado: it.estado ?? '', horario: it.horario ?? '', dia: it.dia ?? '', notas: it.notas ?? '', esBug: it.esBug ?? false });
     setModal({ mode: 'edit', id });
   };
   const save = async () => {
@@ -512,6 +517,7 @@ export default function TrabajoApp() {
       horario: form.horario.trim() || undefined,
       dia: form.dia.trim() || undefined,
       notas: form.notas.trim() || undefined,
+      esBug: form.esBug || undefined,
     };
     if (modal?.mode === 'edit') {
       await onChange(items.map(i => i.id === modal.id ? { ...i, ...campos } : i));
@@ -605,6 +611,15 @@ export default function TrabajoApp() {
           <Field label="Tarea">
             <TextInput value={form.texto} onChange={e => setForm(f => ({ ...f, texto: e.target.value }))} autoFocus />
           </Field>
+          <label className="flex items-center gap-2 cursor-pointer select-none -mt-1">
+            <input
+              type="checkbox"
+              checked={form.esBug}
+              onChange={e => setForm(f => ({ ...f, esBug: e.target.checked }))}
+              className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
+            />
+            <span className="text-sm text-[var(--text-primary)]">Es un bug</span>
+          </label>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Empresa (opcional)">
               <CampoInput value={form.empresa} onChange={c => setForm(f => ({ ...f, empresa: c }))} opciones={empresas} datalistId="trabajo-empresas" placeholder="Empresa" />

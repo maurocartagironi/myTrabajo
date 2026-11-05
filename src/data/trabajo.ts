@@ -12,6 +12,7 @@ export interface TareaTrabajo {
   horario?: string;
   dia?: string;
   notas?: string; // ej. por qué está "En espera", se ve con un ícono al lado del nombre
+  esBug?: boolean; // se muestra como un pill "BUG" al lado del título
 }
 
 export interface TrabajoData {
