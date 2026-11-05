@@ -199,9 +199,10 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
   coloresEstado: Record<string, string>;
   resaltadoActual: Map<number, 'fuerte' | 'suave'>;
 }) {
-  const completar = (id: number, texto: string) => {
-    if (window.confirm(`¿Marcar "${texto}" como completada? Se borra de la lista.`)) onDelete(id);
-  };
+  // El confirm() nativo del navegador no es confiable acá (a veces no dispara, o la fila queda
+  // en un estado raro después) - un modal propio, igual que el resto de la app, funciona siempre.
+  const [completarTarget, setCompletarTarget] = useState<{ id: number; texto: string } | null>(null);
+  const completar = (id: number, texto: string) => setCompletarTarget({ id, texto });
   // Mueve la tarea un lugar hacia arriba/abajo dentro del grupo. El orden se muestra tal cual
   // está guardado (ya no se reordena solo por horario), así que esto mueve la fila de verdad.
   // Sirve para ajustes finos de a un lugar; para mover algo lejos está el arrastre de abajo.
@@ -310,6 +311,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
   };
 
   return (
+    <>
     <div ref={containerRef}>
       {localItems.map(it => {
         const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
@@ -439,6 +441,19 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
       })}
       {items.length === 0 && <p className="text-xs text-[var(--text-tertiary)] text-center py-2">Sin tareas.</p>}
     </div>
+    {completarTarget && (
+      <Modal
+        title="Marcar completada"
+        onClose={() => setCompletarTarget(null)}
+        onSave={async () => { onDelete(completarTarget.id); setCompletarTarget(null); }}
+        saveLabel="Completar"
+      >
+        <p className="text-[var(--text-primary)] text-sm">
+          ¿Marcás <span className="font-medium">"{completarTarget.texto}"</span> como completada? Se borra de la lista.
+        </p>
+      </Modal>
+    )}
+    </>
   );
 }
 
