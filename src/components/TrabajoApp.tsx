@@ -125,6 +125,24 @@ function diaDeHoy(): string {
   return DIAS_JS[new Date().getDay()];
 }
 
+function fechaISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+// La próxima fecha real (hoy o más adelante) en la que cae ese día de la semana. Si hoy es
+// viernes y se elige "Lunes", da el lunes que viene (nunca uno que ya pasó) - así una tarea
+// nueva para un día "anterior" en la semana se entiende como de la semana que viene, y no se
+// confunde con una tarea vieja que quedó pendiente de días atrás.
+function proximaFechaDelDia(diaNombre: string, desde: Date): string {
+  const idxObjetivo = ORDEN_DIAS.indexOf(diaNombre);
+  if (idxObjetivo === -1) return fechaISO(desde);
+  const idxHoy = (desde.getDay() + 6) % 7; // getDay() es 0=domingo; ORDEN_DIAS empieza en lunes
+  let diff = idxObjetivo - idxHoy;
+  if (diff < 0) diff += 7;
+  const resultado = new Date(desde);
+  resultado.setDate(resultado.getDate() + diff);
+  return fechaISO(resultado);
+}
+
 // Minutos desde medianoche si el horario es una hora puntual tipo "16:00", o null si es
 // "Mañana"/"Tarde"/"Noche" (o no tiene horario).
 function horarioAMinutos(h?: string): number | null {
@@ -469,23 +487,34 @@ export default function TrabajoApp() {
   const items = data.tareas;
   const onChange = (next: TareaTrabajo[]) => updateData({ tareas: next });
 
-  // Si quedó alguna tarea con un día ya pasado esta semana (ej. hoy es miércoles y quedó algo en
-  // "Martes"), se migra sola al día de hoy - así no queda nunca una tarea perdida en un día viejo
-  // que ya no se vuelve a mostrar agrupado. Se revisa al cargar, cada vez que cambian las tareas,
-  // y cada un rato por si la pestaña queda abierta y cambia el día mientras tanto.
+  // Si quedó alguna tarea con un día que ya pasó de verdad (diaFecha real anterior a hoy), se
+  // migra sola al día de hoy - así no queda nunca una tarea perdida en un día viejo que ya no se
+  // vuelve a mostrar agrupado. Las tareas con diaFecha (creadas/editadas con la lógica nueva) se
+  // comparan por fecha real, nunca por índice de día de la semana: si hoy es viernes y se elige
+  // "Lunes", diaFecha ya apunta al lunes que viene, así que no se toca hasta que ese lunes pase de
+  // verdad. Las tareas viejas sin diaFecha (de antes de que existiera el campo) siguen el criterio
+  // anterior por índice dentro de la semana, para no dejar de migrar lo que ya estaba pendiente.
+  // Se revisa al cargar, cada vez que cambian las tareas, y cada un rato por si la pestaña queda
+  // abierta y cambia el día mientras tanto.
   const [tickDia, setTickDia] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTickDia(t => t + 1), 60_000);
     return () => clearInterval(id);
   }, []);
   useEffect(() => {
+    const ahora = new Date();
     const hoy = diaDeHoy();
+    const hoyISO = fechaISO(ahora);
     const hoyIdx = ORDEN_DIAS.indexOf(hoy);
     if (hoyIdx === -1) return;
-    const aMigrar = items.filter(i => i.dia && ORDEN_DIAS.includes(i.dia) && ORDEN_DIAS.indexOf(i.dia) < hoyIdx);
+    const aMigrar = items.filter(i => {
+      if (!i.dia) return false;
+      if (i.diaFecha) return i.diaFecha < hoyISO;
+      return ORDEN_DIAS.includes(i.dia) && ORDEN_DIAS.indexOf(i.dia) < hoyIdx;
+    });
     if (aMigrar.length === 0) return;
     const idsAMigrar = new Set(aMigrar.map(i => i.id));
-    onChange(items.map(i => (idsAMigrar.has(i.id) ? { ...i, dia: hoy } : i)));
+    onChange(items.map(i => (idsAMigrar.has(i.id) ? { ...i, dia: hoy, diaFecha: hoyISO } : i)));
   }, [items, tickDia]);
 
   const coloresProyecto = data.coloresProyecto;
@@ -516,6 +545,7 @@ export default function TrabajoApp() {
       estado: form.estado.trim() || undefined,
       horario: form.horario.trim() || undefined,
       dia: form.dia.trim() || undefined,
+      diaFecha: form.dia.trim() ? proximaFechaDelDia(form.dia.trim(), new Date()) : undefined,
       notas: form.notas.trim() || undefined,
       esBug: form.esBug || undefined,
     };

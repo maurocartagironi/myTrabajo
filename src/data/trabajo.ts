@@ -11,6 +11,7 @@ export interface TareaTrabajo {
   estado?: string; // uno de los valores fijos en ESTADOS_TRABAJO, o uno personalizado (TrabajoApp.tsx)
   horario?: string;
   dia?: string;
+  diaFecha?: string; // "YYYY-MM-DD" real a la que apunta "dia" (ver migración de días en TrabajoApp.tsx)
   notas?: string; // ej. por qué está "En espera", se ve con un ícono al lado del nombre
   esBug?: boolean; // se muestra como un pill "BUG" al lado del título
 }
