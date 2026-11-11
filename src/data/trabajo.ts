@@ -8,7 +8,10 @@ export interface TareaTrabajo {
   empresa?: string;
   proyecto?: string;
   us?: string; // número de user story, ej. "SFCDB-429"
-  estado?: string; // uno de los valores fijos en ESTADOS_TRABAJO, o uno personalizado (TrabajoApp.tsx)
+  // Uno o varios, fijos (ESTADOS_TRABAJO) o personalizados. Antes era un solo string; sigue
+  // aceptándose así para no romper tareas viejas - ver estadosDe() en TrabajoApp.tsx para leerlo
+  // siempre como lista.
+  estado?: string | string[];
   horario?: string;
   dia?: string;
   diaFecha?: string; // "YYYY-MM-DD" real a la que apunta "dia" (ver migración de días en TrabajoApp.tsx)

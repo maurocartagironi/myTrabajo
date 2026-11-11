@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, ArrowDown, Pencil, Trash2, Check, ChevronDown, ChevronRight, Plus, Sun, Sunset, Moon } from 'lucide-react';
+import { ArrowUp, ArrowDown, Pencil, Trash2, Check, ChevronDown, ChevronRight, Plus, Sun, Sunset, Moon, X } from 'lucide-react';
 import { useTrabajo } from '../context/TrabajoContext';
 import type { TareaTrabajo } from '../data/trabajo';
 import { nextId } from '../services/api';
@@ -200,6 +200,13 @@ function colorDeEstado(nombre: string | undefined, coloresEstado: Record<string,
   return coloresEstado[nombre] ?? colorHashDeProyecto(nombre);
 }
 
+// Normaliza "estado" a una lista siempre, soportando tanto el string suelto de antes como la
+// lista nueva (una tarea puede tener más de un estado).
+function estadosDe(it: { estado?: string | string[] }): string[] {
+  if (Array.isArray(it.estado)) return it.estado.filter(Boolean);
+  return it.estado ? [it.estado] : [];
+}
+
 function groupByField<T>(items: T[], campo: (item: T) => string | undefined, orden?: string[]) {
   const sueltos = items.filter(i => !campo(i));
   let valores = [...new Set(items.map(campo).filter((v): v is string => !!v))];
@@ -333,8 +340,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
     <div ref={containerRef}>
       {localItems.map(it => {
         const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
-        const estadoInfo = ESTADOS_TRABAJO.find(e => e.value === it.estado);
-        const colorEstadoCustom = it.estado && !estadoInfo ? colorDeEstado(it.estado, coloresEstado) : undefined;
+        const estadosList = estadosDe(it);
 
         // Línea compacta tipo bullet: [Horario] - [Empresa] [Proyecto] - [Texto], con el estado
         // como pill al final y, si hay nota, una segunda línea más chica debajo.
@@ -404,19 +410,26 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
                     </span>
                   ))}
                 </span>
-                {it.estado && ocultarCampo !== 'estado' && (
-                  estadoInfo ? (
-                    <span className={`shrink-0 text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border ${estadoInfo.className}`}>
-                      {estadoInfo.value}
-                    </span>
-                  ) : (
-                    <span
-                      className="shrink-0 text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border"
-                      style={{ color: colorEstadoCustom, borderColor: `${colorEstadoCustom}4d`, backgroundColor: `${colorEstadoCustom}1a` }}
-                    >
-                      {it.estado}
-                    </span>
-                  )
+                {ocultarCampo !== 'estado' && estadosList.length > 0 && (
+                  <span className="flex items-center gap-1 flex-wrap shrink-0">
+                    {estadosList.map(valor => {
+                      const info = ESTADOS_TRABAJO.find(e => e.value === valor);
+                      const colorCustom = !info ? colorDeEstado(valor, coloresEstado) : undefined;
+                      return info ? (
+                        <span key={valor} className={`text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border ${info.className}`}>
+                          {info.value}
+                        </span>
+                      ) : (
+                        <span
+                          key={valor}
+                          className="text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border"
+                          style={{ color: colorCustom, borderColor: `${colorCustom}4d`, backgroundColor: `${colorCustom}1a` }}
+                        >
+                          {valor}
+                        </span>
+                      );
+                    })}
+                  </span>
                 )}
               </p>
               {it.notas && <p className="text-[0.6875rem] text-[var(--text-tertiary)] leading-tight">{it.notas}</p>}
@@ -524,15 +537,21 @@ export default function TrabajoApp() {
 
   const [agruparPor, setAgruparPor] = useState<'dia' | 'proyecto' | 'estado' | 'horario' | 'ninguno'>('dia');
   const [modal, setModal] = useState<{ mode: 'add' } | { mode: 'edit'; id: number } | null>(null);
-  const [form, setForm] = useState({ texto: '', proyecto: '', empresa: '', us: '', estado: '', horario: '', dia: '', notas: '', esBug: false });
+  const [form, setForm] = useState({ texto: '', proyecto: '', empresa: '', us: '', estados: [] as string[], horario: '', dia: '', notas: '', esBug: false });
+  const [estadoInput, setEstadoInput] = useState('');
   const [colorEnEleccion, setColorEnEleccion] = useState<string | null>(null);
   const [colorEstadoEnEleccion, setColorEstadoEnEleccion] = useState<string | null>(null);
+  const toggleEstado = (v: string) => setForm(f => ({
+    ...f,
+    estados: f.estados.includes(v) ? f.estados.filter(x => x !== v) : [...f.estados, v],
+  }));
 
-  const openAdd = () => { setForm({ texto: '', proyecto: '', empresa: '', us: '', estado: '', horario: '', dia: '', notas: '', esBug: false }); setModal({ mode: 'add' }); };
+  const openAdd = () => { setForm({ texto: '', proyecto: '', empresa: '', us: '', estados: [], horario: '', dia: '', notas: '', esBug: false }); setEstadoInput(''); setModal({ mode: 'add' }); };
   const openEdit = (id: number) => {
     const it = items.find(i => i.id === id);
     if (!it) return;
-    setForm({ texto: it.texto, proyecto: it.proyecto ?? '', empresa: it.empresa ?? '', us: it.us ?? '', estado: it.estado ?? '', horario: it.horario ?? '', dia: it.dia ?? '', notas: it.notas ?? '', esBug: it.esBug ?? false });
+    setForm({ texto: it.texto, proyecto: it.proyecto ?? '', empresa: it.empresa ?? '', us: it.us ?? '', estados: estadosDe(it), horario: it.horario ?? '', dia: it.dia ?? '', notas: it.notas ?? '', esBug: it.esBug ?? false });
+    setEstadoInput('');
     setModal({ mode: 'edit', id });
   };
   const save = async () => {
@@ -542,7 +561,7 @@ export default function TrabajoApp() {
       proyecto: form.proyecto.trim() || undefined,
       empresa: form.empresa.trim() || undefined,
       us: form.us.trim() || undefined,
-      estado: form.estado.trim() || undefined,
+      estado: form.estados.length > 0 ? form.estados : undefined,
       horario: form.horario.trim() || undefined,
       dia: form.dia.trim() || undefined,
       diaFecha: form.dia.trim() ? proximaFechaDelDia(form.dia.trim(), new Date()) : undefined,
@@ -563,14 +582,15 @@ export default function TrabajoApp() {
   const empresas = valoresDe(i => i.empresa);
   const horarios = valoresDe(i => i.horario);
   const dias = valoresDe(i => i.dia);
-  const estadosCustomUsados = valoresDe(i => i.estado).filter(v => !ESTADOS_TRABAJO.some(e => e.value === v));
-  const estadoEsCustom = form.estado.trim() !== '' && !ESTADOS_TRABAJO.some(e => e.value === form.estado.trim());
+  const estadosCustomUsados = [...new Set(items.flatMap(estadosDe))].filter(v => !ESTADOS_TRABAJO.some(e => e.value === v));
+  const estadoInputEsNuevo = estadoInput.trim() !== '' && !ESTADOS_TRABAJO.some(e => e.value === estadoInput.trim()) && !form.estados.includes(estadoInput.trim());
+  const estadosCustomEnForm = form.estados.filter(v => !ESTADOS_TRABAJO.some(e => e.value === v));
 
-  const pendientes = items.filter(i => i.estado === 'Pendiente');
-  const resto = items.filter(i => i.estado !== 'Pendiente');
+  const pendientes = items.filter(i => estadosDe(i).includes('Pendiente'));
+  const resto = items.filter(i => !estadosDe(i).includes('Pendiente'));
 
   const campoActivo = (it: TareaTrabajo) =>
-    agruparPor === 'dia' ? (it.dia || diaPorDefecto()) : agruparPor === 'proyecto' ? it.proyecto : agruparPor === 'estado' ? it.estado : agruparPor === 'horario' ? it.horario : undefined;
+    agruparPor === 'dia' ? (it.dia || diaPorDefecto()) : agruparPor === 'proyecto' ? it.proyecto : agruparPor === 'estado' ? estadosDe(it)[0] : agruparPor === 'horario' ? it.horario : undefined;
   const groups = agruparPor === 'ninguno' ? null : groupByField(resto, campoActivo, agruparPor === 'dia' ? ORDEN_DIAS : undefined);
 
   // Qué tarea(s) de hoy caen en el período actual (resaltado suave) o en la hora puntual actual
@@ -689,33 +709,46 @@ export default function TrabajoApp() {
           <Field label="N° de US (opcional)">
             <TextInput value={form.us} onChange={e => setForm(f => ({ ...f, us: e.target.value }))} />
           </Field>
-          <Field label="Estado (opcional)">
+          <Field label="Estado (opcional, se pueden elegir varios)">
+            {form.estados.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {form.estados.map(v => {
+                  const info = ESTADOS_TRABAJO.find(e => e.value === v);
+                  const color = !info ? colorDeEstado(v, coloresEstado) : undefined;
+                  return (
+                    <span
+                      key={v}
+                      className={`flex items-center gap-1 text-xs pl-2.5 pr-1.5 py-1 rounded-full border ${info ? info.className : ''}`}
+                      style={info ? undefined : { color, borderColor: `${color}4d`, backgroundColor: `${color}1a` }}
+                    >
+                      {v}
+                      <button type="button" onClick={() => toggleEstado(v)} className="hover:opacity-70" aria-label={`Sacar ${v}`}>
+                        <X size={11} />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
             <div className="flex flex-wrap gap-1.5 mb-2">
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, estado: '' }))}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${form.estado === '' ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400' : 'border-[var(--border)] text-[var(--text-secondary)]'}`}
-              >
-                Sin estado
-              </button>
               {ESTADOS_TRABAJO.map(e => (
                 <button
                   type="button"
                   key={e.value}
-                  onClick={() => setForm(f => ({ ...f, estado: e.value }))}
-                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${form.estado === e.value ? e.className : 'border-[var(--border)] text-[var(--text-secondary)]'}`}
+                  onClick={() => toggleEstado(e.value)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${form.estados.includes(e.value) ? e.className : 'border-[var(--border)] text-[var(--text-secondary)]'}`}
                 >
                   {e.value}
                 </button>
               ))}
               {estadosCustomUsados.map(v => {
                 const color = colorDeEstado(v, coloresEstado);
-                const activo = form.estado === v;
+                const activo = form.estados.includes(v);
                 return (
                   <button
                     type="button"
                     key={v}
-                    onClick={() => setForm(f => ({ ...f, estado: v }))}
+                    onClick={() => toggleEstado(v)}
                     className="text-xs px-2.5 py-1 rounded-full border transition-colors"
                     style={activo
                       ? { color, borderColor: `${color}4d`, backgroundColor: `${color}1a` }
@@ -726,39 +759,45 @@ export default function TrabajoApp() {
                 );
               })}
             </div>
-            <CampoInput
-              value={form.estado}
-              onChange={v => setForm(f => ({ ...f, estado: v }))}
-              opciones={estadosCustomUsados}
-              datalistId="trabajo-estados-custom"
-              placeholder="O escribí un estado nuevo..."
+            <input
+              value={estadoInput}
+              onChange={e => setEstadoInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key !== 'Tab' || !estadoInputEsNuevo) return;
+                e.preventDefault();
+                toggleEstado(estadoInput.trim());
+                setEstadoInput('');
+              }}
+              placeholder="Escribí un estado y Tab para agregarlo..."
+              className={smallInputClass}
             />
-            {estadoEsCustom && (
-              <div className="flex flex-wrap items-center gap-2 mt-2">
+            {estadosCustomEnForm.map(v => (
+              <div key={v} className="flex flex-wrap items-center gap-2 mt-2">
+                <span className="text-xs text-[var(--text-tertiary)] w-full">Color de "{v}"</span>
                 {PROYECTO_COLORS.map(c => (
                   <button
                     key={c}
                     type="button"
-                    onClick={() => setColorEstado(form.estado.trim(), c)}
+                    onClick={() => setColorEstado(v, c)}
                     aria-label={c}
                     style={{ backgroundColor: c }}
-                    className={`w-6 h-6 rounded-full shrink-0 ${colorDeEstado(form.estado.trim(), coloresEstado) === c ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-surface)] ring-emerald-400' : ''}`}
+                    className={`w-6 h-6 rounded-full shrink-0 ${colorDeEstado(v, coloresEstado) === c ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-surface)] ring-emerald-400' : ''}`}
                   />
                 ))}
                 <label className="relative w-6 h-6 rounded-full shrink-0 overflow-hidden cursor-pointer" style={{ background: 'conic-gradient(from 0deg, #ef4444, #facc15, #10b981, #3b82f6, #a855f7, #ef4444)' }}>
                   <input
                     type="color"
-                    value={colorEstadoEnEleccion ?? colorDeEstado(form.estado.trim(), coloresEstado)}
+                    value={colorEstadoEnEleccion ?? colorDeEstado(v, coloresEstado)}
                     onChange={e => setColorEstadoEnEleccion(e.target.value)}
                     onBlur={() => {
-                      if (colorEstadoEnEleccion) setColorEstado(form.estado.trim(), colorEstadoEnEleccion);
+                      if (colorEstadoEnEleccion) setColorEstado(v, colorEstadoEnEleccion);
                       setColorEstadoEnEleccion(null);
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer"
                   />
                 </label>
               </div>
-            )}
+            ))}
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Horario (opcional)">
