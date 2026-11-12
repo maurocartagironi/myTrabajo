@@ -36,12 +36,13 @@ function guardarGrupoColapsado(title: string, colapsado: boolean) {
   }
 }
 
-function CollapsibleGroup({ title, items, coloresProyecto, destacado, backlogCount, children }: {
+function CollapsibleGroup({ title, items, coloresProyecto, destacado, backlogCount, backlogTitulos, children }: {
   title: string;
   items: TareaTrabajo[];
   coloresProyecto: Record<string, string>;
   destacado?: boolean; // ej. el día de hoy cuando está agrupado por día: se nota con un fondo propio
   backlogCount?: number; // cuántas tareas de este grupo están en backlog (no se listan, solo cuentan)
+  backlogTitulos?: string[]; // títulos de esas tareas, para el tooltip del pill
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(() => !leerGruposColapsados()[title]);
@@ -78,7 +79,10 @@ function CollapsibleGroup({ title, items, coloresProyecto, destacado, backlogCou
           </span>
         )}
         {!!backlogCount && (
-          <span className="ml-auto shrink-0 normal-case tracking-normal text-[0.625rem] font-bold px-2 py-0.5 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] border border-[var(--border)]">
+          <span
+            title={backlogTitulos?.join('\n')}
+            className="ml-auto shrink-0 normal-case tracking-normal text-[0.625rem] font-bold px-2 py-0.5 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] border border-[var(--border)]"
+          >
             {backlogCount} backlog
           </span>
         )}
@@ -662,7 +666,7 @@ export default function TrabajoApp() {
           {groups.valores.map(v => {
             const itemsDelGrupo = groups.de(v);
             const itemsVisiblesDelGrupo = itemsDelGrupo.filter(i => !i.esBacklog);
-            const backlogCount = itemsDelGrupo.length - itemsVisiblesDelGrupo.length;
+            const itemsBacklogDelGrupo = itemsDelGrupo.filter(i => i.esBacklog);
             return (
               <CollapsibleGroup
                 key={v}
@@ -670,7 +674,8 @@ export default function TrabajoApp() {
                 items={itemsVisiblesDelGrupo}
                 coloresProyecto={coloresProyecto}
                 destacado={agruparPor === 'dia' && v === diaDeHoy()}
-                backlogCount={agruparPor === 'dia' ? backlogCount : 0}
+                backlogCount={agruparPor === 'dia' ? itemsBacklogDelGrupo.length : 0}
+                backlogTitulos={itemsBacklogDelGrupo.map(i => i.texto)}
               >
                 <TrabajoRows {...rowsProps(itemsVisiblesDelGrupo)} estadoOculto={agruparPor === 'estado' ? v : undefined} />
               </CollapsibleGroup>
