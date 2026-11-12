@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowUp, ArrowDown, Pencil, Trash2, Check, ChevronDown, ChevronRight, Plus, Sun, Sunset, Moon, X } from 'lucide-react';
 import { useTrabajo } from '../context/TrabajoContext';
 import type { TareaTrabajo } from '../data/trabajo';
@@ -39,6 +40,8 @@ function guardarGrupoColapsado(title: string, colapsado: boolean) {
 // Pill "N backlog" del título de cada grupo, con un tooltip propio (no el nativo del navegador,
 // que tarda en aparecer) que al pasar el mouse muestra cada tarea con el mismo detalle que la
 // fila normal: empresa, proyecto, N° de US y estado(s), no solo el título pelado.
+const BACKLOG_TOOLTIP_ANCHO = 320;
+
 function BacklogPill({ count, items, coloresProyecto, coloresEstado, onEditItem }: {
   count: number;
   items: TareaTrabajo[];
@@ -47,18 +50,50 @@ function BacklogPill({ count, items, coloresProyecto, coloresEstado, onEditItem 
   onEditItem: (id: number) => void;
 }) {
   const [show, setShow] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
+  const hideTimeout = useRef<number | null>(null);
+
+  // Posición calculada a mano (no CSS puro) para que, sin importar dónde quede el pill en la
+  // página, el tooltip nunca se corte contra el borde de la ventana: primero intenta pegarse al
+  // lado izquierdo del pill, y si no entra, lo alinea contra el borde derecho de la pantalla.
+  const actualizarPos = () => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const gap = 8;
+    let left = r.left - BACKLOG_TOOLTIP_ANCHO - gap;
+    if (left < gap) left = Math.max(gap, window.innerWidth - BACKLOG_TOOLTIP_ANCHO - gap);
+    const top = Math.max(gap, Math.min(r.top, window.innerHeight - gap - 60));
+    setPos({ top, left });
+  };
+
+  // El tooltip va por portal a document.body (para no cortarse contra la ventana), así que queda
+  // fuera de este <span> - sin este delay, mover el mouse del pill hacia el tooltip lo cerraba
+  // antes de poder llegar a clickear algo adentro, porque "salís" del span antes de "entrar" al
+  // tooltip.
+  const cancelarCierre = () => { if (hideTimeout.current != null) { window.clearTimeout(hideTimeout.current); hideTimeout.current = null; } };
+  const programarCierre = () => { cancelarCierre(); hideTimeout.current = window.setTimeout(() => setShow(false), 150); };
+  useEffect(() => cancelarCierre, []);
+
   return (
     <span
+      ref={ref}
       className="relative ml-auto shrink-0"
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
+      onMouseEnter={() => { actualizarPos(); cancelarCierre(); setShow(true); }}
+      onMouseLeave={programarCierre}
       onClick={e => e.stopPropagation()}
     >
       <span className="normal-case tracking-normal text-[0.625rem] font-bold px-2 py-0.5 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] border border-[var(--border)] block">
         {count} backlog
       </span>
-      {show && items.length > 0 && (
-        <div className="absolute right-full top-1/2 -translate-y-1/2 mr-2 z-20 w-[320px] max-w-[85vw] bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden normal-case tracking-normal font-normal">
+      {show && items.length > 0 && pos && createPortal(
+        <div
+          onMouseEnter={cancelarCierre}
+          onMouseLeave={programarCierre}
+          onClick={e => e.stopPropagation()}
+          className="fixed z-[60] max-h-[70vh] overflow-y-auto bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl shadow-2xl overflow-x-hidden normal-case tracking-normal font-normal"
+          style={{ top: pos.top, left: pos.left, width: BACKLOG_TOOLTIP_ANCHO }}
+        >
           {items.map(it => {
             const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
             const estados = estadosDe(it);
@@ -102,7 +137,8 @@ function BacklogPill({ count, items, coloresProyecto, coloresEstado, onEditItem 
               </div>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </span>
   );
