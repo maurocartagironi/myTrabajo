@@ -214,12 +214,16 @@ function groupByField<T>(items: T[], campo: (item: T) => string | undefined, ord
   return { sueltos, valores, de: (v: string) => items.filter(i => campo(i) === v) };
 }
 
-function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, coloresProyecto, coloresEstado, resaltadoActual }: {
+function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoOculto, coloresProyecto, coloresEstado, resaltadoActual }: {
   items: TareaTrabajo[];
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
   onReorder: (items: TareaTrabajo[]) => void;
   ocultarCampo?: 'proyecto' | 'estado' | 'horario' | 'dia';
+  // El valor de estado ya representado por el grupo (ej. "Pendiente" en esa sección, o el valor
+  // del grupo cuando se agrupa por Estado) - se saca de los pills de la fila por redundante, pero
+  // sin tapar otros estados que la tarea también tenga.
+  estadoOculto?: string;
   coloresProyecto: Record<string, string>;
   coloresEstado: Record<string, string>;
   resaltadoActual: Map<number, 'fuerte' | 'suave'>;
@@ -340,7 +344,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
     <div ref={containerRef}>
       {localItems.map(it => {
         const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
-        const estadosList = estadosDe(it);
+        const estadosList = estadosDe(it).filter(v => v !== estadoOculto);
 
         // Línea compacta tipo bullet: [Horario] - [Empresa] [Proyecto] - [Texto], con el estado
         // como pill al final y, si hay nota, una segunda línea más chica debajo.
@@ -410,7 +414,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, colores
                     </span>
                   ))}
                 </span>
-                {ocultarCampo !== 'estado' && estadosList.length > 0 && (
+                {estadosList.length > 0 && (
                   <span className="flex items-center gap-1 flex-wrap shrink-0">
                     {estadosList.map(valor => {
                       const info = ESTADOS_TRABAJO.find(e => e.value === valor);
@@ -633,7 +637,7 @@ export default function TrabajoApp() {
 
       {pendientes.length > 0 && (
         <CollapsibleGroup title="Pendientes" items={pendientes} coloresProyecto={coloresProyecto}>
-          <TrabajoRows {...rowsProps(pendientes)} ocultarCampo="estado" />
+          <TrabajoRows {...rowsProps(pendientes)} estadoOculto="Pendiente" />
         </CollapsibleGroup>
       )}
       {groups === null ? (
@@ -649,7 +653,7 @@ export default function TrabajoApp() {
               coloresProyecto={coloresProyecto}
               destacado={agruparPor === 'dia' && v === diaDeHoy()}
             >
-              <TrabajoRows {...rowsProps(groups.de(v))} />
+              <TrabajoRows {...rowsProps(groups.de(v))} estadoOculto={agruparPor === 'estado' ? v : undefined} />
             </CollapsibleGroup>
           ))}
         </>
