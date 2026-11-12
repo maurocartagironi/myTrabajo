@@ -36,6 +36,33 @@ function guardarGrupoColapsado(title: string, colapsado: boolean) {
   }
 }
 
+// Pill "N backlog" del título de cada grupo, con un tooltip propio (no el nativo del navegador,
+// que tarda en aparecer) que lista los títulos al pasar el mouse.
+function BacklogPill({ count, titulos }: { count: number; titulos: string[] }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span
+      className="relative ml-auto shrink-0"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      onClick={e => e.stopPropagation()}
+    >
+      <span className="normal-case tracking-normal text-[0.625rem] font-bold px-2 py-0.5 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] border border-[var(--border)] block">
+        {count} backlog
+      </span>
+      {show && titulos.length > 0 && (
+        <div className="absolute top-full right-0 mt-1 z-20 min-w-[160px] max-w-[260px] bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg shadow-xl overflow-hidden normal-case tracking-normal font-normal">
+          {titulos.map((t, i) => (
+            <p key={i} className="text-xs text-[var(--text-primary)] px-2.5 py-1.5 border-b border-[var(--border)] last:border-0 truncate">
+              {t}
+            </p>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
 function CollapsibleGroup({ title, items, coloresProyecto, destacado, backlogCount, backlogTitulos, children }: {
   title: string;
   items: TareaTrabajo[];
@@ -78,14 +105,7 @@ function CollapsibleGroup({ title, items, coloresProyecto, destacado, backlogCou
             })}
           </span>
         )}
-        {!!backlogCount && (
-          <span
-            title={backlogTitulos?.join('\n')}
-            className="ml-auto shrink-0 normal-case tracking-normal text-[0.625rem] font-bold px-2 py-0.5 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] border border-[var(--border)]"
-          >
-            {backlogCount} backlog
-          </span>
-        )}
+        {!!backlogCount && <BacklogPill count={backlogCount} titulos={backlogTitulos ?? []} />}
       </button>
       {open && children}
     </div>
@@ -607,7 +627,9 @@ export default function TrabajoApp() {
   // tiene backlog sigue apareciendo con su título y el pill), y recién se sacan al mostrar las
   // filas de cada grupo; en el resto de las agrupaciones no hace falta ese cuidado, van afuera
   // directamente para no crear grupos fantasma que solo tendrían backlog adentro.
-  const restoConBacklog = items.filter(i => !estadosDe(i).includes('Pendiente'));
+  // Una tarea de backlog entra igual aunque también tenga el estado "Pendiente" (el backlog se
+  // cuenta aparte de eso) - si no, se perdía sin aparecer ni en Pendientes ni en el conteo.
+  const restoConBacklog = items.filter(i => i.esBacklog || !estadosDe(i).includes('Pendiente'));
   const restoSinBacklog = restoConBacklog.filter(i => !i.esBacklog);
 
   const campoActivo = (it: TareaTrabajo) =>
