@@ -37,8 +37,14 @@ function guardarGrupoColapsado(title: string, colapsado: boolean) {
 }
 
 // Pill "N backlog" del título de cada grupo, con un tooltip propio (no el nativo del navegador,
-// que tarda en aparecer) que lista los títulos al pasar el mouse.
-function BacklogPill({ count, titulos }: { count: number; titulos: string[] }) {
+// que tarda en aparecer) que al pasar el mouse muestra cada tarea con el mismo detalle que la
+// fila normal: empresa, proyecto, N° de US y estado(s), no solo el título pelado.
+function BacklogPill({ count, items, coloresProyecto, coloresEstado }: {
+  count: number;
+  items: TareaTrabajo[];
+  coloresProyecto: Record<string, string>;
+  coloresEstado: Record<string, string>;
+}) {
   const [show, setShow] = useState(false);
   return (
     <span
@@ -50,26 +56,59 @@ function BacklogPill({ count, titulos }: { count: number; titulos: string[] }) {
       <span className="normal-case tracking-normal text-[0.625rem] font-bold px-2 py-0.5 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] border border-[var(--border)] block">
         {count} backlog
       </span>
-      {show && titulos.length > 0 && (
-        <div className="absolute top-full right-0 mt-1 z-20 min-w-[160px] max-w-[260px] bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg shadow-xl overflow-hidden normal-case tracking-normal font-normal">
-          {titulos.map((t, i) => (
-            <p key={i} className="text-xs text-[var(--text-primary)] px-2.5 py-1.5 border-b border-[var(--border)] last:border-0 truncate">
-              {t}
-            </p>
-          ))}
+      {show && items.length > 0 && (
+        <div className="absolute top-full right-0 mt-1 z-20 min-w-[220px] max-w-[300px] bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden normal-case tracking-normal font-normal">
+          {items.map(it => {
+            const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
+            const estados = estadosDe(it);
+            return (
+              <div key={it.id} className="px-2.5 py-2 border-b border-[var(--border)] last:border-0">
+                <p className="text-xs leading-snug">
+                  {it.empresa && <span className="font-bold text-[var(--text-primary)]">{it.empresa}</span>}
+                  {it.empresa && it.proyecto && ' '}
+                  {it.proyecto && <span className="font-bold" style={{ color: colorProy }}>{it.proyecto}</span>}
+                  {(it.empresa || it.proyecto) && <span className="text-[var(--text-tertiary)] px-1">·</span>}
+                  {it.us && <span className="font-bold text-[var(--text-secondary)]">{it.us}</span>}
+                  {it.us && ' - '}
+                  <span className="text-[var(--text-secondary)]">{it.texto}</span>
+                </p>
+                {estados.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {estados.map(valor => {
+                      const info = ESTADOS_TRABAJO.find(e => e.value === valor);
+                      const colorEst = !info ? colorDeEstado(valor, coloresEstado) : undefined;
+                      return info ? (
+                        <span key={valor} className={`text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border ${info.className}`}>
+                          {info.value}
+                        </span>
+                      ) : (
+                        <span
+                          key={valor}
+                          className="text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border"
+                          style={{ color: colorEst, borderColor: `${colorEst}4d`, backgroundColor: `${colorEst}1a` }}
+                        >
+                          {valor}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </span>
   );
 }
 
-function CollapsibleGroup({ title, items, coloresProyecto, destacado, backlogCount, backlogTitulos, children }: {
+function CollapsibleGroup({ title, items, coloresProyecto, coloresEstado, destacado, backlogItems, children }: {
   title: string;
   items: TareaTrabajo[];
   coloresProyecto: Record<string, string>;
+  coloresEstado?: Record<string, string>; // hace falta si hay backlogItems, para sus pills de estado
   destacado?: boolean; // ej. el día de hoy cuando está agrupado por día: se nota con un fondo propio
-  backlogCount?: number; // cuántas tareas de este grupo están en backlog (no se listan, solo cuentan)
-  backlogTitulos?: string[]; // títulos de esas tareas, para el tooltip del pill
+  backlogItems?: TareaTrabajo[]; // tareas en backlog de este grupo (no se listan, solo cuentan)
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(() => !leerGruposColapsados()[title]);
@@ -105,7 +144,9 @@ function CollapsibleGroup({ title, items, coloresProyecto, destacado, backlogCou
             })}
           </span>
         )}
-        {!!backlogCount && <BacklogPill count={backlogCount} titulos={backlogTitulos ?? []} />}
+        {!!backlogItems?.length && (
+          <BacklogPill count={backlogItems.length} items={backlogItems} coloresProyecto={coloresProyecto} coloresEstado={coloresEstado ?? {}} />
+        )}
       </button>
       {open && children}
     </div>
@@ -695,9 +736,9 @@ export default function TrabajoApp() {
                 title={v}
                 items={itemsVisiblesDelGrupo}
                 coloresProyecto={coloresProyecto}
+                coloresEstado={coloresEstado}
                 destacado={agruparPor === 'dia' && v === diaDeHoy()}
-                backlogCount={agruparPor === 'dia' ? itemsBacklogDelGrupo.length : 0}
-                backlogTitulos={itemsBacklogDelGrupo.map(i => i.texto)}
+                backlogItems={agruparPor === 'dia' ? itemsBacklogDelGrupo : undefined}
               >
                 <TrabajoRows {...rowsProps(itemsVisiblesDelGrupo)} estadoOculto={agruparPor === 'estado' ? v : undefined} />
               </CollapsibleGroup>
