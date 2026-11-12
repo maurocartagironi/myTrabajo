@@ -36,11 +36,12 @@ function guardarGrupoColapsado(title: string, colapsado: boolean) {
   }
 }
 
-function CollapsibleGroup({ title, items, coloresProyecto, destacado, children }: {
+function CollapsibleGroup({ title, items, coloresProyecto, destacado, backlogCount, children }: {
   title: string;
   items: TareaTrabajo[];
   coloresProyecto: Record<string, string>;
   destacado?: boolean; // ej. el día de hoy cuando está agrupado por día: se nota con un fondo propio
+  backlogCount?: number; // cuántas tareas de este grupo están en backlog (no se listan, solo cuentan)
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(() => !leerGruposColapsados()[title]);
@@ -74,6 +75,11 @@ function CollapsibleGroup({ title, items, coloresProyecto, destacado, children }
                 </span>
               );
             })}
+          </span>
+        )}
+        {!!backlogCount && (
+          <span className="ml-auto shrink-0 normal-case tracking-normal text-[0.625rem] font-bold px-2 py-0.5 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] border border-[var(--border)]">
+            {backlogCount} backlog
           </span>
         )}
       </button>
@@ -541,7 +547,7 @@ export default function TrabajoApp() {
 
   const [agruparPor, setAgruparPor] = useState<'dia' | 'proyecto' | 'estado' | 'horario' | 'ninguno'>('dia');
   const [modal, setModal] = useState<{ mode: 'add' } | { mode: 'edit'; id: number } | null>(null);
-  const [form, setForm] = useState({ texto: '', proyecto: '', empresa: '', us: '', estados: [] as string[], horario: '', dia: '', notas: '', esBug: false });
+  const [form, setForm] = useState({ texto: '', proyecto: '', empresa: '', us: '', estados: [] as string[], horario: '', dia: '', notas: '', esBug: false, esBacklog: false });
   const [estadoInput, setEstadoInput] = useState('');
   const [colorEnEleccion, setColorEnEleccion] = useState<string | null>(null);
   const [colorEstadoEnEleccion, setColorEstadoEnEleccion] = useState<string | null>(null);
@@ -550,11 +556,11 @@ export default function TrabajoApp() {
     estados: f.estados.includes(v) ? f.estados.filter(x => x !== v) : [...f.estados, v],
   }));
 
-  const openAdd = () => { setForm({ texto: '', proyecto: '', empresa: '', us: '', estados: [], horario: '', dia: '', notas: '', esBug: false }); setEstadoInput(''); setModal({ mode: 'add' }); };
+  const openAdd = () => { setForm({ texto: '', proyecto: '', empresa: '', us: '', estados: [], horario: '', dia: '', notas: '', esBug: false, esBacklog: false }); setEstadoInput(''); setModal({ mode: 'add' }); };
   const openEdit = (id: number) => {
     const it = items.find(i => i.id === id);
     if (!it) return;
-    setForm({ texto: it.texto, proyecto: it.proyecto ?? '', empresa: it.empresa ?? '', us: it.us ?? '', estados: estadosDe(it), horario: it.horario ?? '', dia: it.dia ?? '', notas: it.notas ?? '', esBug: it.esBug ?? false });
+    setForm({ texto: it.texto, proyecto: it.proyecto ?? '', empresa: it.empresa ?? '', us: it.us ?? '', estados: estadosDe(it), horario: it.horario ?? '', dia: it.dia ?? '', notas: it.notas ?? '', esBug: it.esBug ?? false, esBacklog: it.esBacklog ?? false });
     setEstadoInput('');
     setModal({ mode: 'edit', id });
   };
@@ -571,6 +577,7 @@ export default function TrabajoApp() {
       diaFecha: form.dia.trim() ? proximaFechaDelDia(form.dia.trim(), new Date()) : undefined,
       notas: form.notas.trim() || undefined,
       esBug: form.esBug || undefined,
+      esBacklog: form.esBacklog || undefined,
     };
     if (modal?.mode === 'edit') {
       await onChange(items.map(i => i.id === modal.id ? { ...i, ...campos } : i));
@@ -590,12 +597,19 @@ export default function TrabajoApp() {
   const estadoInputEsNuevo = estadoInput.trim() !== '' && !ESTADOS_TRABAJO.some(e => e.value === estadoInput.trim()) && !form.estados.includes(estadoInput.trim());
   const estadosCustomEnForm = form.estados.filter(v => !ESTADOS_TRABAJO.some(e => e.value === v));
 
-  const pendientes = items.filter(i => estadosDe(i).includes('Pendiente'));
-  const resto = items.filter(i => !estadosDe(i).includes('Pendiente'));
+  const pendientes = items.filter(i => estadosDe(i).includes('Pendiente') && !i.esBacklog);
+  // Las de backlog (asignadas pero sin empezar todavía) no se listan en ningún lado - solo
+  // cuentan. Al agrupar por día se arman los grupos incluyéndolas igual (así un día que hoy solo
+  // tiene backlog sigue apareciendo con su título y el pill), y recién se sacan al mostrar las
+  // filas de cada grupo; en el resto de las agrupaciones no hace falta ese cuidado, van afuera
+  // directamente para no crear grupos fantasma que solo tendrían backlog adentro.
+  const restoConBacklog = items.filter(i => !estadosDe(i).includes('Pendiente'));
+  const restoSinBacklog = restoConBacklog.filter(i => !i.esBacklog);
 
   const campoActivo = (it: TareaTrabajo) =>
     agruparPor === 'dia' ? (it.dia || diaPorDefecto()) : agruparPor === 'proyecto' ? it.proyecto : agruparPor === 'estado' ? estadosDe(it)[0] : agruparPor === 'horario' ? it.horario : undefined;
-  const groups = agruparPor === 'ninguno' ? null : groupByField(resto, campoActivo, agruparPor === 'dia' ? ORDEN_DIAS : undefined);
+  const baseAgrupar = agruparPor === 'dia' ? restoConBacklog : restoSinBacklog;
+  const groups = agruparPor === 'ninguno' ? null : groupByField(baseAgrupar, campoActivo, agruparPor === 'dia' ? ORDEN_DIAS : undefined);
 
   // Qué tarea(s) de hoy caen en el período actual (resaltado suave) o en la hora puntual actual
   // (resaltado fuerte) - se recalcula solo (vía tickDia) a medida que pasa el tiempo, sin
@@ -641,21 +655,27 @@ export default function TrabajoApp() {
         </CollapsibleGroup>
       )}
       {groups === null ? (
-        <TrabajoRows {...rowsProps(resto)} />
+        <TrabajoRows {...rowsProps(restoSinBacklog)} />
       ) : (
         <>
           {groups.sueltos.length > 0 && <TrabajoRows {...rowsProps(groups.sueltos)} />}
-          {groups.valores.map(v => (
-            <CollapsibleGroup
-              key={v}
-              title={v}
-              items={groups.de(v)}
-              coloresProyecto={coloresProyecto}
-              destacado={agruparPor === 'dia' && v === diaDeHoy()}
-            >
-              <TrabajoRows {...rowsProps(groups.de(v))} estadoOculto={agruparPor === 'estado' ? v : undefined} />
-            </CollapsibleGroup>
-          ))}
+          {groups.valores.map(v => {
+            const itemsDelGrupo = groups.de(v);
+            const itemsVisiblesDelGrupo = itemsDelGrupo.filter(i => !i.esBacklog);
+            const backlogCount = itemsDelGrupo.length - itemsVisiblesDelGrupo.length;
+            return (
+              <CollapsibleGroup
+                key={v}
+                title={v}
+                items={itemsVisiblesDelGrupo}
+                coloresProyecto={coloresProyecto}
+                destacado={agruparPor === 'dia' && v === diaDeHoy()}
+                backlogCount={agruparPor === 'dia' ? backlogCount : 0}
+              >
+                <TrabajoRows {...rowsProps(itemsVisiblesDelGrupo)} estadoOculto={agruparPor === 'estado' ? v : undefined} />
+              </CollapsibleGroup>
+            );
+          })}
         </>
       )}
       {items.length === 0 && <p className="text-sm text-[var(--text-tertiary)] text-center py-8">Sin tareas cargadas todavía.</p>}
@@ -665,15 +685,26 @@ export default function TrabajoApp() {
           <Field label="Tarea">
             <TextInput value={form.texto} onChange={e => setForm(f => ({ ...f, texto: e.target.value }))} autoFocus />
           </Field>
-          <label className="flex items-center gap-2 cursor-pointer select-none -mt-1">
-            <input
-              type="checkbox"
-              checked={form.esBug}
-              onChange={e => setForm(f => ({ ...f, esBug: e.target.checked }))}
-              className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
-            />
-            <span className="text-sm text-[var(--text-primary)]">Es un bug</span>
-          </label>
+          <div className="flex items-center gap-4 -mt-1">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.esBug}
+                onChange={e => setForm(f => ({ ...f, esBug: e.target.checked }))}
+                className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
+              />
+              <span className="text-sm text-[var(--text-primary)]">Es un bug</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.esBacklog}
+                onChange={e => setForm(f => ({ ...f, esBacklog: e.target.checked }))}
+                className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
+              />
+              <span className="text-sm text-[var(--text-primary)]">Es backlog</span>
+            </label>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Empresa (opcional)">
               <CampoInput value={form.empresa} onChange={c => setForm(f => ({ ...f, empresa: c }))} opciones={empresas} datalistId="trabajo-empresas" placeholder="Empresa" />
