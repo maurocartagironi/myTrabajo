@@ -57,7 +57,7 @@ function BacklogPill({ count, items, coloresProyecto, coloresEstado }: {
         {count} backlog
       </span>
       {show && items.length > 0 && (
-        <div className="absolute top-full right-0 mt-1 z-20 min-w-[220px] max-w-[300px] bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden normal-case tracking-normal font-normal">
+        <div className="absolute top-full right-0 mt-1 z-20 w-[320px] max-w-[85vw] bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl shadow-2xl overflow-hidden normal-case tracking-normal font-normal">
           {items.map(it => {
             const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
             const estados = estadosDe(it);
