@@ -63,15 +63,16 @@ function BacklogPill({ count, items, coloresProyecto, coloresEstado }: {
             const estados = estadosDe(it);
             return (
               <div key={it.id} className="px-2.5 py-2 border-b border-[var(--border)] last:border-0">
-                <p className="text-xs leading-snug">
-                  {it.empresa && <span className="font-bold text-[var(--text-primary)]">{it.empresa}</span>}
-                  {it.empresa && it.proyecto && ' '}
-                  {it.proyecto && <span className="font-bold" style={{ color: colorProy }}>{it.proyecto}</span>}
-                  {(it.empresa || it.proyecto) && <span className="text-[var(--text-tertiary)] px-1">·</span>}
-                  {it.us && <span className="font-bold text-[var(--text-secondary)]">{it.us}</span>}
-                  {it.us && ' - '}
-                  <span className="text-[var(--text-secondary)]">{it.texto}</span>
-                </p>
+                {(it.empresa || it.proyecto || it.us) && (
+                  <p className="text-[0.6875rem] leading-tight mb-0.5">
+                    {it.empresa && <span className="font-bold text-[var(--text-primary)]">{it.empresa}</span>}
+                    {it.empresa && it.proyecto && ' '}
+                    {it.proyecto && <span className="font-bold" style={{ color: colorProy }}>{it.proyecto}</span>}
+                    {(it.empresa || it.proyecto) && it.us && <span className="text-[var(--text-tertiary)] px-1">·</span>}
+                    {it.us && <span className="font-bold text-[var(--text-secondary)]">{it.us}</span>}
+                  </p>
+                )}
+                <p className="text-xs text-[var(--text-primary)] leading-snug">{it.texto}</p>
                 {estados.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {estados.map(valor => {
