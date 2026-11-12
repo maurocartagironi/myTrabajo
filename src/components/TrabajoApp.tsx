@@ -39,11 +39,12 @@ function guardarGrupoColapsado(title: string, colapsado: boolean) {
 // Pill "N backlog" del título de cada grupo, con un tooltip propio (no el nativo del navegador,
 // que tarda en aparecer) que al pasar el mouse muestra cada tarea con el mismo detalle que la
 // fila normal: empresa, proyecto, N° de US y estado(s), no solo el título pelado.
-function BacklogPill({ count, items, coloresProyecto, coloresEstado }: {
+function BacklogPill({ count, items, coloresProyecto, coloresEstado, onEditItem }: {
   count: number;
   items: TareaTrabajo[];
   coloresProyecto: Record<string, string>;
   coloresEstado: Record<string, string>;
+  onEditItem: (id: number) => void;
 }) {
   const [show, setShow] = useState(false);
   return (
@@ -62,7 +63,11 @@ function BacklogPill({ count, items, coloresProyecto, coloresEstado }: {
             const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
             const estados = estadosDe(it);
             return (
-              <div key={it.id} className="px-2.5 py-2 border-b border-[var(--border)] last:border-0">
+              <div
+                key={it.id}
+                onClick={() => onEditItem(it.id)}
+                className="px-2.5 py-2 border-b border-[var(--border)] last:border-0 cursor-pointer hover:bg-[var(--bg-surface-hover)] transition-colors"
+              >
                 {(it.empresa || it.proyecto || it.us) && (
                   <p className="text-[0.6875rem] leading-tight mb-0.5">
                     {it.empresa && <span className="font-bold text-[var(--text-primary)]">{it.empresa}</span>}
@@ -103,13 +108,14 @@ function BacklogPill({ count, items, coloresProyecto, coloresEstado }: {
   );
 }
 
-function CollapsibleGroup({ title, items, coloresProyecto, coloresEstado, destacado, backlogItems, children }: {
+function CollapsibleGroup({ title, items, coloresProyecto, coloresEstado, destacado, backlogItems, onEditBacklogItem, children }: {
   title: string;
   items: TareaTrabajo[];
   coloresProyecto: Record<string, string>;
   coloresEstado?: Record<string, string>; // hace falta si hay backlogItems, para sus pills de estado
   destacado?: boolean; // ej. el día de hoy cuando está agrupado por día: se nota con un fondo propio
   backlogItems?: TareaTrabajo[]; // tareas en backlog de este grupo (no se listan, solo cuentan)
+  onEditBacklogItem?: (id: number) => void; // click en una del tooltip de backlog -> la abre a editar
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(() => !leerGruposColapsados()[title]);
@@ -146,7 +152,13 @@ function CollapsibleGroup({ title, items, coloresProyecto, coloresEstado, destac
           </span>
         )}
         {!!backlogItems?.length && (
-          <BacklogPill count={backlogItems.length} items={backlogItems} coloresProyecto={coloresProyecto} coloresEstado={coloresEstado ?? {}} />
+          <BacklogPill
+            count={backlogItems.length}
+            items={backlogItems}
+            coloresProyecto={coloresProyecto}
+            coloresEstado={coloresEstado ?? {}}
+            onEditItem={id => onEditBacklogItem?.(id)}
+          />
         )}
       </button>
       {open && children}
@@ -740,6 +752,7 @@ export default function TrabajoApp() {
                 coloresEstado={coloresEstado}
                 destacado={agruparPor === 'dia' && v === diaDeHoy()}
                 backlogItems={agruparPor === 'dia' ? itemsBacklogDelGrupo : undefined}
+                onEditBacklogItem={openEdit}
               >
                 <TrabajoRows {...rowsProps(itemsVisiblesDelGrupo)} estadoOculto={agruparPor === 'estado' ? v : undefined} />
               </CollapsibleGroup>
