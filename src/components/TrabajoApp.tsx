@@ -604,6 +604,9 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
         const padre = it.padreId ? tareasPorId.get(it.padreId) : undefined;
         const hijosDirectos = hijosPorPadreId.get(it.id) ?? [];
         const colapsado = tareasColapsadas.has(it.id);
+        // Una hija se ve 1px más chica que su padre en todo (ícono, textos, pills), para que la
+        // jerarquía también se note en el tamaño, no sólo en la indentación.
+        const chico = depth > 0;
 
         return (
           <div
@@ -650,21 +653,32 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
               </div>
             )}
             <span
-              className={`shrink-0 w-6 h-6 rounded flex flex-col items-center justify-center font-bold overflow-hidden ${
+              className={`shrink-0 ${chico ? 'w-[23px] h-[23px]' : 'w-6 h-6'} rounded flex flex-col items-center justify-center font-bold overflow-hidden ${
                 it.horario && ocultarCampo !== 'horario' ? 'border border-[var(--border)] bg-[var(--bg-surface-hover)] text-[var(--text-secondary)]' : ''
               }`}
               title={it.horario}
             >
               {it.horario && ocultarCampo !== 'horario' && (
                 ICONO_HORARIO[it.horario]
-                  ? (() => { const Icono = ICONO_HORARIO[it.horario]; return <Icono size={13} />; })()
+                  ? (() => { const Icono = ICONO_HORARIO[it.horario]; return <Icono size={chico ? 12 : 13} />; })()
                   : horarioBadgeLineas(it.horario).map((linea, i, arr) => (
-                      <span key={i} className={arr.length === 2 ? 'text-[0.5625rem] leading-[0.5625rem]' : 'text-xs leading-none'}>{linea}</span>
+                      <span key={i} className={arr.length === 2 ? (chico ? 'text-[0.5rem] leading-[0.5rem]' : 'text-[0.5625rem] leading-[0.5625rem]') : (chico ? 'text-[0.6875rem] leading-none' : 'text-xs leading-none')}>{linea}</span>
                     ))
               )}
             </span>
+            {hijosDirectos.length > 0 && (
+              <button
+                type="button"
+                data-tree-toggle
+                onClick={e => { e.stopPropagation(); onToggleColapso(it.id); }}
+                className={`shrink-0 flex items-center ${chico ? 'text-[0.5625rem]' : 'text-[0.625rem]'} font-bold leading-none text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors`}
+                title={colapsado ? 'Mostrar dependientes' : 'Ocultar dependientes'}
+              >
+                {colapsado ? <><ChevronRight size={chico ? 9 : 10} />{hijosDirectos.length}</> : <ChevronDown size={chico ? 9 : 10} />}
+              </button>
+            )}
             <div className="flex-1 min-w-0">
-              <p className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[0.8125rem] leading-5">
+              <p className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 leading-5 ${chico ? 'text-[0.75rem]' : 'text-[0.8125rem]'}`}>
                 <span className="min-w-0">
                   {segmentos.map((seg, i) => (
                     <span key={i}>
@@ -673,30 +687,19 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
                     </span>
                   ))}
                 </span>
-                {(estadosList.length > 0 || hijosDirectos.length > 0) && (
+                {estadosList.length > 0 && (
                   <span className="flex items-center gap-1 flex-wrap shrink-0">
-                    {hijosDirectos.length > 0 && (
-                      <button
-                        type="button"
-                        data-tree-toggle
-                        onClick={e => { e.stopPropagation(); onToggleColapso(it.id); }}
-                        className="flex items-center text-[0.625rem] font-bold leading-none text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
-                        title={colapsado ? 'Mostrar dependientes' : 'Ocultar dependientes'}
-                      >
-                        {colapsado ? <><ChevronRight size={10} />{hijosDirectos.length}</> : <ChevronDown size={10} />}
-                      </button>
-                    )}
                     {estadosList.map(valor => {
                       const info = ESTADOS_TRABAJO.find(e => e.value === valor);
                       const colorCustom = !info ? colorDeEstado(valor, coloresEstado) : undefined;
                       return info ? (
-                        <span key={valor} className={`text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border ${info.className}`}>
+                        <span key={valor} className={`${chico ? 'text-[0.4375rem]' : 'text-[0.5rem]'} font-bold uppercase leading-none px-1 py-0.5 rounded-full border ${info.className}`}>
                           {info.value}
                         </span>
                       ) : (
                         <span
                           key={valor}
-                          className="text-[0.5rem] font-bold uppercase leading-none px-1 py-0.5 rounded-full border"
+                          className={`${chico ? 'text-[0.4375rem]' : 'text-[0.5rem]'} font-bold uppercase leading-none px-1 py-0.5 rounded-full border`}
                           style={{ color: colorCustom, borderColor: `${colorCustom}4d`, backgroundColor: `${colorCustom}1a` }}
                         >
                           {valor}
@@ -706,7 +709,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
                   </span>
                 )}
               </p>
-              {it.notas && <p className="text-[0.6875rem] text-[var(--text-tertiary)] leading-tight">{it.notas}</p>}
+              {it.notas && <p className={`${chico ? 'text-[0.625rem]' : 'text-[0.6875rem]'} text-[var(--text-tertiary)] leading-tight`}>{it.notas}</p>}
               {depth === 0 && padre && (
                 <p className="flex items-center gap-1 text-[0.6875rem] text-[var(--text-tertiary)] leading-tight">
                   <CornerDownRight size={10} className="shrink-0" />
