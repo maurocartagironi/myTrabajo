@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUp, ArrowDown, Pencil, Trash2, Check, ChevronDown, ChevronRight, Plus, Sun, Sunset, Moon, X, CornerDownRight } from 'lucide-react';
 import { useTrabajo } from '../context/TrabajoContext';
@@ -37,6 +37,25 @@ function guardarGrupoColapsado(title: string, colapsado: boolean) {
   }
 }
 
+// Qué tareas padre están colapsadas (para esconder sus dependientes) - es global, no por grupo:
+// si se colapsa una tarea viendo "Por día", también queda colapsada viendo "Por proyecto".
+const TAREAS_COLAPSADAS_KEY = 'mt_tareas_colapsadas';
+function leerTareasColapsadas(): number[] {
+  try {
+    const raw = localStorage.getItem(TAREAS_COLAPSADAS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+function guardarTareasColapsadas(ids: number[]) {
+  try {
+    localStorage.setItem(TAREAS_COLAPSADAS_KEY, JSON.stringify(ids));
+  } catch {
+    // localStorage no disponible, la preferencia no persiste pero no rompe nada
+  }
+}
+
 // Pill "N backlog" del título de cada grupo, con un tooltip propio (no el nativo del navegador,
 // que tarda en aparecer) que al pasar el mouse muestra cada tarea con el mismo detalle que la
 // fila normal: empresa, proyecto, N° de US y estado(s), no solo el título pelado.
@@ -52,7 +71,19 @@ function BacklogPill({ count, items, coloresProyecto, coloresEstado, onEditItem 
   const [show, setShow] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const hideTimeout = useRef<number | null>(null);
+
+  // Una vez que el tooltip ya está en el DOM se conoce su alto real (depende de cuántos items y
+  // cuánto texto tiene cada uno) - si con ese alto se pasaría del borde inferior de la ventana, se
+  // sube para que entre entero y no quede el último item cortado.
+  useLayoutEffect(() => {
+    if (!show || !pos || !tooltipRef.current) return;
+    const gap = 8;
+    const alto = tooltipRef.current.getBoundingClientRect().height;
+    const topAjustado = Math.max(gap, Math.min(pos.top, window.innerHeight - gap - alto));
+    if (Math.abs(topAjustado - pos.top) > 0.5) setPos(p => (p ? { ...p, top: topAjustado } : p));
+  }, [show, pos]);
 
   // Posición calculada a mano (no CSS puro) para que, sin importar dónde quede el pill en la
   // página, el tooltip nunca se corte contra el borde de la ventana: primero intenta pegarse al
@@ -88,6 +119,7 @@ function BacklogPill({ count, items, coloresProyecto, coloresEstado, onEditItem 
       </span>
       {show && items.length > 0 && pos && createPortal(
         <div
+          ref={tooltipRef}
           onMouseEnter={cancelarCierre}
           onMouseLeave={programarCierre}
           onClick={e => e.stopPropagation()}
@@ -113,7 +145,7 @@ function BacklogPill({ count, items, coloresProyecto, coloresEstado, onEditItem 
                   </p>
                 )}
                 <p className="text-xs text-[var(--text-primary)] leading-snug">{it.texto}</p>
-                {it.notas && <p className="text-[0.6875rem] text-[var(--text-tertiary)] leading-snug mt-0.5">{it.notas}</p>}
+                {it.notas && <p className="text-[0.625rem] text-[var(--text-tertiary)] leading-snug mt-0.5">{it.notas}</p>}
                 {estados.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {estados.map(valor => {
@@ -351,6 +383,46 @@ function etiquetaTarea(it: TareaTrabajo): string {
   return prefijo ? `${prefijo} - ${it.texto}` : it.texto;
 }
 
+interface FilaArbol {
+  item: TareaTrabajo;
+  depth: number;
+  // Por cada ancestro (sin contar el padre inmediato), si en esa columna todavía hay que seguir
+  // dibujando la línea vertical (true = ese ancestro tiene más hermanos después, la rama sigue).
+  guiasAncestros: boolean[];
+  esUltimo: boolean; // si es la última entre sus hermanas - define el conector propio (└ vs ├)
+}
+
+// Convierte la lista plana (en el orden en que se muestran, respetando el arrastre) en el orden
+// de árbol: cada tarea aparece seguida de sus hijas (las que tienen padreId apuntando a ella y
+// están en esta misma lista - si el padre está en otro grupo, la tarea se trata como raíz acá, y
+// se muestra su "Depende de" aparte en vez de anidarla). Sólo sirve para decidir el ORDEN y la
+// indentación visual; el array de datos real no cambia.
+function aplanarArbol(items: TareaTrabajo[]): FilaArbol[] {
+  const idsPresentes = new Set(items.map(i => i.id));
+  const hijosDe = new Map<number, TareaTrabajo[]>();
+  const raices: TareaTrabajo[] = [];
+  items.forEach(it => {
+    if (it.padreId != null && idsPresentes.has(it.padreId)) {
+      const arr = hijosDe.get(it.padreId) ?? [];
+      arr.push(it);
+      hijosDe.set(it.padreId, arr);
+    } else {
+      raices.push(it);
+    }
+  });
+  const resultado: FilaArbol[] = [];
+  const recorrer = (nodos: TareaTrabajo[], depth: number, guias: boolean[]) => {
+    nodos.forEach((it, idx) => {
+      const esUltimo = idx === nodos.length - 1;
+      resultado.push({ item: it, depth, guiasAncestros: guias, esUltimo });
+      const hijos = hijosDe.get(it.id);
+      if (hijos && hijos.length > 0) recorrer(hijos, depth + 1, [...guias, !esUltimo]);
+    });
+  };
+  recorrer(raices, 0, []);
+  return resultado;
+}
+
 function groupByField<T>(items: T[], campo: (item: T) => string | undefined, orden?: string[]) {
   const sueltos = items.filter(i => !campo(i));
   let valores = [...new Set(items.map(campo).filter((v): v is string => !!v))];
@@ -358,7 +430,7 @@ function groupByField<T>(items: T[], campo: (item: T) => string | undefined, ord
   return { sueltos, valores, de: (v: string) => items.filter(i => campo(i) === v) };
 }
 
-function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoOculto, coloresProyecto, coloresEstado, resaltadoActual, tareasPorId }: {
+function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoOculto, coloresProyecto, coloresEstado, resaltadoActual, tareasPorId, hijosPorPadreId, tareasColapsadas, onToggleColapso }: {
   items: TareaTrabajo[];
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
@@ -374,6 +446,11 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
   // Todas las tareas (no solo las de este grupo), para poder mostrar el nombre de la tarea padre
   // aunque esté en otro grupo (otro día/proyecto/estado).
   tareasPorId: Map<number, TareaTrabajo>;
+  // Hijas directas de cada tarea (calculado sobre todas las tareas, no solo este grupo), para
+  // mostrar en el padre que tiene dependencias aunque estén en otro grupo.
+  hijosPorPadreId: Map<number, TareaTrabajo[]>;
+  tareasColapsadas: Set<number>;
+  onToggleColapso: (id: number) => void;
 }) {
   // El confirm() nativo del navegador no es confiable acá (a veces no dispara, o la fila queda
   // en un estado raro después) - un modal propio, igual que el resto de la app, funciona siempre.
@@ -423,7 +500,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
   };
 
   const onRowPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: number) => {
-    if ((e.target as HTMLElement).closest('[data-menu]')) return;
+    if ((e.target as HTMLElement).closest('[data-menu], [data-tree-toggle]')) return;
     startPosRef.current = { x: e.clientX, y: e.clientY };
     longPressRef.current = false;
     clearLongPressTimer();
@@ -468,7 +545,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
   };
 
   const onRowPointerUp = (e: React.PointerEvent<HTMLDivElement>, id: number) => {
-    if ((e.target as HTMLElement).closest('[data-menu]')) return;
+    if ((e.target as HTMLElement).closest('[data-menu], [data-tree-toggle]')) return;
     clearLongPressTimer();
     if (draggingRef.current != null) {
       draggingRef.current = null;
@@ -489,7 +566,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
   return (
     <>
     <div ref={containerRef}>
-      {localItems.map(it => {
+      {aplanarArbol(localItems).map(({ item: it, depth, guiasAncestros, esUltimo }) => {
         const colorProy = colorDeProyecto(it.proyecto, coloresProyecto);
         const estadosList = estadosDe(it).filter(v => v !== estadoOculto);
 
@@ -518,6 +595,8 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
 
         const nivelActual = resaltadoActual.get(it.id);
         const padre = it.padreId ? tareasPorId.get(it.padreId) : undefined;
+        const hijosDirectos = hijosPorPadreId.get(it.id) ?? [];
+        const colapsado = tareasColapsadas.has(it.id);
 
         return (
           <div
@@ -528,7 +607,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
             onPointerUp={e => onRowPointerUp(e, it.id)}
             onPointerCancel={onRowPointerCancel}
             style={{ touchAction: draggingId === it.id ? 'none' : 'pan-y' }}
-            className={`relative flex items-center gap-1.5 px-1 -mx-1 py-0.5 rounded select-none transition-colors ${padre ? 'ml-5 border-l border-[var(--border)] pl-2' : ''} ${
+            className={`relative flex items-center gap-1.5 px-1 -mx-1 py-0.5 rounded select-none transition-colors ${
               draggingId === it.id
                 ? 'cursor-grabbing bg-[var(--bg-surface-hover)] shadow-lg ring-1 ring-emerald-500/40 z-10'
                 : nivelActual === 'fuerte'
@@ -538,6 +617,19 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
                 : 'cursor-pointer hover:bg-[var(--bg-surface-hover)]'
             }`}
           >
+            {depth > 0 && (
+              <div className="flex self-stretch shrink-0">
+                {guiasAncestros.map((continua, i) => (
+                  <div key={i} className="relative w-4 shrink-0">
+                    {continua && <div className="absolute left-1/2 top-0 bottom-0 w-px bg-[var(--border)]" />}
+                  </div>
+                ))}
+                <div className="relative w-4 shrink-0">
+                  <div className="absolute left-1/2 top-0 w-px bg-[var(--border)]" style={{ bottom: esUltimo ? '50%' : 0 }} />
+                  <div className="absolute left-1/2 top-1/2 w-2 h-px bg-[var(--border)]" />
+                </div>
+              </div>
+            )}
             <span
               className={`shrink-0 w-6 h-6 rounded flex flex-col items-center justify-center font-bold overflow-hidden ${
                 it.horario && ocultarCampo !== 'horario' ? 'border border-[var(--border)] bg-[var(--bg-surface-hover)] text-[var(--text-secondary)]' : ''
@@ -562,8 +654,20 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
                     </span>
                   ))}
                 </span>
-                {estadosList.length > 0 && (
+                {(estadosList.length > 0 || hijosDirectos.length > 0) && (
                   <span className="flex items-center gap-1 flex-wrap shrink-0">
+                    {hijosDirectos.length > 0 && (
+                      <button
+                        type="button"
+                        data-tree-toggle
+                        onClick={e => { e.stopPropagation(); onToggleColapso(it.id); }}
+                        className="flex items-center gap-0.5 text-[0.625rem] font-bold px-1.5 py-0.5 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] border border-[var(--border)] hover:text-[var(--text-primary)] transition-colors"
+                        title={colapsado ? 'Mostrar dependientes' : 'Ocultar dependientes'}
+                      >
+                        {colapsado ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
+                        {hijosDirectos.length}
+                      </button>
+                    )}
                     {estadosList.map(valor => {
                       const info = ESTADOS_TRABAJO.find(e => e.value === valor);
                       const colorCustom = !info ? colorDeEstado(valor, coloresEstado) : undefined;
@@ -585,7 +689,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
                 )}
               </p>
               {it.notas && <p className="text-[0.6875rem] text-[var(--text-tertiary)] leading-tight">{it.notas}</p>}
-              {padre && (
+              {depth === 0 && padre && (
                 <p className="flex items-center gap-1 text-[0.6875rem] text-[var(--text-tertiary)] leading-tight">
                   <CornerDownRight size={10} className="shrink-0" />
                   Depende de: {etiquetaTarea(padre)}
@@ -694,6 +798,28 @@ export default function TrabajoApp() {
   const setColorEstado = (estado: string, color: string) => updateData({ coloresEstado: { ...coloresEstado, [estado]: color } });
 
   const tareasPorId = new Map(items.map(i => [i.id, i]));
+  const hijosPorPadreId = new Map<number, TareaTrabajo[]>();
+  items.forEach(i => {
+    if (i.padreId == null) return;
+    const arr = hijosPorPadreId.get(i.padreId) ?? [];
+    arr.push(i);
+    hijosPorPadreId.set(i.padreId, arr);
+  });
+
+  const [tareasColapsadas, setTareasColapsadas] = useState<Set<number>>(() => new Set(leerTareasColapsadas()));
+  const toggleColapsoTarea = (id: number) => setTareasColapsadas(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    guardarTareasColapsadas([...next]);
+    return next;
+  });
+  // Si una tarea padre está colapsada, se esconden todas sus dependientes (directas e
+  // indirectas), en cualquier agrupación, no solo donde se tocó el toggle.
+  const idsOcultosPorColapso = new Set<number>();
+  tareasColapsadas.forEach(id => {
+    if (tareasPorId.has(id)) descendientesDe(id, items).forEach(dId => idsOcultosPorColapso.add(dId));
+  });
+  const itemsVisibles = items.filter(i => !idsOcultosPorColapso.has(i.id));
 
   const [agruparPor, setAgruparPor] = useState<'dia' | 'proyecto' | 'estado' | 'horario' | 'ninguno'>('dia');
   const [modal, setModal] = useState<{ mode: 'add' } | { mode: 'edit'; id: number } | null>(null);
@@ -750,7 +876,7 @@ export default function TrabajoApp() {
   const estadoInputEsNuevo = estadoInput.trim() !== '' && !ESTADOS_TRABAJO.some(e => e.value === estadoInput.trim()) && !form.estados.includes(estadoInput.trim());
   const estadosCustomEnForm = form.estados.filter(v => !ESTADOS_TRABAJO.some(e => e.value === v));
 
-  const pendientes = items.filter(i => estadosDe(i).includes('Pendiente') && !i.esBacklog);
+  const pendientes = itemsVisibles.filter(i => estadosDe(i).includes('Pendiente') && !i.esBacklog);
   // Las de backlog (asignadas pero sin empezar todavía) no se listan en ningún lado - solo
   // cuentan. Al agrupar por día se arman los grupos incluyéndolas igual (así un día que hoy solo
   // tiene backlog sigue apareciendo con su título y el pill), y recién se sacan al mostrar las
@@ -758,7 +884,7 @@ export default function TrabajoApp() {
   // directamente para no crear grupos fantasma que solo tendrían backlog adentro.
   // Una tarea de backlog entra igual aunque también tenga el estado "Pendiente" (el backlog se
   // cuenta aparte de eso) - si no, se perdía sin aparecer ni en Pendientes ni en el conteo.
-  const restoConBacklog = items.filter(i => i.esBacklog || !estadosDe(i).includes('Pendiente'));
+  const restoConBacklog = itemsVisibles.filter(i => i.esBacklog || !estadosDe(i).includes('Pendiente'));
   const restoSinBacklog = restoConBacklog.filter(i => !i.esBacklog);
 
   const campoActivo = (it: TareaTrabajo) =>
@@ -769,7 +895,7 @@ export default function TrabajoApp() {
   // Qué tarea(s) de hoy caen en el período actual (resaltado suave) o en la hora puntual actual
   // (resaltado fuerte) - se recalcula solo (vía tickDia) a medida que pasa el tiempo, sin
   // recargar la página.
-  const resaltadoActual = resaltadoTareaActualHoy(items.filter(i => i.dia === diaDeHoy()));
+  const resaltadoActual = resaltadoTareaActualHoy(itemsVisibles.filter(i => i.dia === diaDeHoy()));
 
   const rowsProps = (lista: TareaTrabajo[]) => ({
     items: lista,
@@ -781,6 +907,9 @@ export default function TrabajoApp() {
     coloresEstado,
     resaltadoActual,
     tareasPorId,
+    hijosPorPadreId,
+    tareasColapsadas,
+    onToggleColapso: toggleColapsoTarea,
   });
 
   return (
