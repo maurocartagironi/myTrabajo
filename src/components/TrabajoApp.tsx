@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUp, ArrowDown, Pencil, Trash2, Check, ChevronDown, ChevronRight, Plus, Sun, Sunset, Moon, X } from 'lucide-react';
+import { ArrowUp, ArrowDown, Pencil, Trash2, Check, ChevronDown, ChevronRight, Plus, Sun, Sunset, Moon, X, CornerDownRight } from 'lucide-react';
 import { useTrabajo } from '../context/TrabajoContext';
 import type { TareaTrabajo } from '../data/trabajo';
 import { nextId } from '../services/api';
@@ -113,6 +113,7 @@ function BacklogPill({ count, items, coloresProyecto, coloresEstado, onEditItem 
                   </p>
                 )}
                 <p className="text-xs text-[var(--text-primary)] leading-snug">{it.texto}</p>
+                {it.notas && <p className="text-[0.6875rem] text-[var(--text-tertiary)] leading-snug mt-0.5">{it.notas}</p>}
                 {estados.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {estados.map(valor => {
@@ -327,6 +328,29 @@ function estadosDe(it: { estado?: string | string[] }): string[] {
   return it.estado ? [it.estado] : [];
 }
 
+// Todos los ids que dependen (directa o indirectamente) de esta tarea - para no poder elegirla
+// a sí misma ni a ninguna de sus hijas como padre, lo que armaría un loop.
+function descendientesDe(id: number, items: TareaTrabajo[]): Set<number> {
+  const result = new Set<number>();
+  const stack = [id];
+  while (stack.length > 0) {
+    const actual = stack.pop()!;
+    for (const it of items) {
+      if (it.padreId === actual && !result.has(it.id)) {
+        result.add(it.id);
+        stack.push(it.id);
+      }
+    }
+  }
+  return result;
+}
+
+// Etiqueta corta para elegir una tarea como padre de otra en el selector.
+function etiquetaTarea(it: TareaTrabajo): string {
+  const prefijo = [it.empresa, it.proyecto].filter(Boolean).join(' ');
+  return prefijo ? `${prefijo} - ${it.texto}` : it.texto;
+}
+
 function groupByField<T>(items: T[], campo: (item: T) => string | undefined, orden?: string[]) {
   const sueltos = items.filter(i => !campo(i));
   let valores = [...new Set(items.map(campo).filter((v): v is string => !!v))];
@@ -334,7 +358,7 @@ function groupByField<T>(items: T[], campo: (item: T) => string | undefined, ord
   return { sueltos, valores, de: (v: string) => items.filter(i => campo(i) === v) };
 }
 
-function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoOculto, coloresProyecto, coloresEstado, resaltadoActual }: {
+function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoOculto, coloresProyecto, coloresEstado, resaltadoActual, tareasPorId }: {
   items: TareaTrabajo[];
   onEdit: (id: number) => void;
   onDelete: (id: number) => void;
@@ -347,6 +371,9 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
   coloresProyecto: Record<string, string>;
   coloresEstado: Record<string, string>;
   resaltadoActual: Map<number, 'fuerte' | 'suave'>;
+  // Todas las tareas (no solo las de este grupo), para poder mostrar el nombre de la tarea padre
+  // aunque esté en otro grupo (otro día/proyecto/estado).
+  tareasPorId: Map<number, TareaTrabajo>;
 }) {
   // El confirm() nativo del navegador no es confiable acá (a veces no dispara, o la fila queda
   // en un estado raro después) - un modal propio, igual que el resto de la app, funciona siempre.
@@ -490,6 +517,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
         ].filter(Boolean);
 
         const nivelActual = resaltadoActual.get(it.id);
+        const padre = it.padreId ? tareasPorId.get(it.padreId) : undefined;
 
         return (
           <div
@@ -500,7 +528,7 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
             onPointerUp={e => onRowPointerUp(e, it.id)}
             onPointerCancel={onRowPointerCancel}
             style={{ touchAction: draggingId === it.id ? 'none' : 'pan-y' }}
-            className={`relative flex items-center gap-1.5 px-1 -mx-1 py-0.5 rounded select-none transition-colors ${
+            className={`relative flex items-center gap-1.5 px-1 -mx-1 py-0.5 rounded select-none transition-colors ${padre ? 'ml-5 border-l border-[var(--border)] pl-2' : ''} ${
               draggingId === it.id
                 ? 'cursor-grabbing bg-[var(--bg-surface-hover)] shadow-lg ring-1 ring-emerald-500/40 z-10'
                 : nivelActual === 'fuerte'
@@ -557,6 +585,12 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
                 )}
               </p>
               {it.notas && <p className="text-[0.6875rem] text-[var(--text-tertiary)] leading-tight">{it.notas}</p>}
+              {padre && (
+                <p className="flex items-center gap-1 text-[0.6875rem] text-[var(--text-tertiary)] leading-tight">
+                  <CornerDownRight size={10} className="shrink-0" />
+                  Depende de: {etiquetaTarea(padre)}
+                </p>
+              )}
             </div>
             {menuAbiertoId === it.id && (
               <div
@@ -659,9 +693,11 @@ export default function TrabajoApp() {
   const coloresEstado = data.coloresEstado;
   const setColorEstado = (estado: string, color: string) => updateData({ coloresEstado: { ...coloresEstado, [estado]: color } });
 
+  const tareasPorId = new Map(items.map(i => [i.id, i]));
+
   const [agruparPor, setAgruparPor] = useState<'dia' | 'proyecto' | 'estado' | 'horario' | 'ninguno'>('dia');
   const [modal, setModal] = useState<{ mode: 'add' } | { mode: 'edit'; id: number } | null>(null);
-  const [form, setForm] = useState({ texto: '', proyecto: '', empresa: '', us: '', estados: [] as string[], horario: '', dia: '', notas: '', esBug: false, esBacklog: false });
+  const [form, setForm] = useState({ texto: '', proyecto: '', empresa: '', us: '', estados: [] as string[], horario: '', dia: '', notas: '', esBug: false, esBacklog: false, padreId: '' as number | '' });
   const [estadoInput, setEstadoInput] = useState('');
   const [colorEnEleccion, setColorEnEleccion] = useState<string | null>(null);
   const [colorEstadoEnEleccion, setColorEstadoEnEleccion] = useState<string | null>(null);
@@ -670,11 +706,11 @@ export default function TrabajoApp() {
     estados: f.estados.includes(v) ? f.estados.filter(x => x !== v) : [...f.estados, v],
   }));
 
-  const openAdd = () => { setForm({ texto: '', proyecto: '', empresa: '', us: '', estados: [], horario: '', dia: '', notas: '', esBug: false, esBacklog: false }); setEstadoInput(''); setModal({ mode: 'add' }); };
+  const openAdd = () => { setForm({ texto: '', proyecto: '', empresa: '', us: '', estados: [], horario: '', dia: '', notas: '', esBug: false, esBacklog: false, padreId: '' }); setEstadoInput(''); setModal({ mode: 'add' }); };
   const openEdit = (id: number) => {
     const it = items.find(i => i.id === id);
     if (!it) return;
-    setForm({ texto: it.texto, proyecto: it.proyecto ?? '', empresa: it.empresa ?? '', us: it.us ?? '', estados: estadosDe(it), horario: it.horario ?? '', dia: it.dia ?? '', notas: it.notas ?? '', esBug: it.esBug ?? false, esBacklog: it.esBacklog ?? false });
+    setForm({ texto: it.texto, proyecto: it.proyecto ?? '', empresa: it.empresa ?? '', us: it.us ?? '', estados: estadosDe(it), horario: it.horario ?? '', dia: it.dia ?? '', notas: it.notas ?? '', esBug: it.esBug ?? false, esBacklog: it.esBacklog ?? false, padreId: it.padreId ?? '' });
     setEstadoInput('');
     setModal({ mode: 'edit', id });
   };
@@ -692,6 +728,7 @@ export default function TrabajoApp() {
       notas: form.notas.trim() || undefined,
       esBug: form.esBug || undefined,
       esBacklog: form.esBacklog || undefined,
+      padreId: form.padreId === '' ? undefined : form.padreId,
     };
     if (modal?.mode === 'edit') {
       await onChange(items.map(i => i.id === modal.id ? { ...i, ...campos } : i));
@@ -700,7 +737,9 @@ export default function TrabajoApp() {
     }
     setModal(null);
   };
-  const del = (id: number) => onChange(items.filter(i => i.id !== id));
+  // Si se borra una tarea que era padre de otras, se les saca el padreId (si no quedaría
+  // apuntando a un id que ya no existe).
+  const del = (id: number) => onChange(items.filter(i => i.id !== id).map(i => i.padreId === id ? { ...i, padreId: undefined } : i));
 
   const valoresDe = (campo: (i: TareaTrabajo) => string | undefined) => [...new Set(items.map(campo).filter((v): v is string => !!v))];
   const proyectos = valoresDe(i => i.proyecto);
@@ -741,6 +780,7 @@ export default function TrabajoApp() {
     coloresProyecto,
     coloresEstado,
     resaltadoActual,
+    tareasPorId,
   });
 
   return (
@@ -861,6 +901,15 @@ export default function TrabajoApp() {
           )}
           <Field label="N° de US (opcional)">
             <TextInput value={form.us} onChange={e => setForm(f => ({ ...f, us: e.target.value }))} />
+          </Field>
+          <Field label="Depende de (opcional)">
+            <SelectInput value={form.padreId} onChange={e => setForm(f => ({ ...f, padreId: e.target.value === '' ? '' : Number(e.target.value) }))}>
+              <option value="">Ninguna</option>
+              {items
+                .filter(i => i.id !== (modal?.mode === 'edit' ? modal.id : -1))
+                .filter(i => modal?.mode !== 'edit' || !descendientesDe(modal.id, items).has(i.id))
+                .map(i => <option key={i.id} value={i.id}>{etiquetaTarea(i)}</option>)}
+            </SelectInput>
           </Field>
           <Field label="Estado (opcional, se pueden elegir varios)">
             {form.estados.length > 0 && (
