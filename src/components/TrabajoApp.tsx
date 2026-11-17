@@ -416,7 +416,14 @@ function aplanarArbol(items: TareaTrabajo[]): FilaArbol[] {
       const esUltimo = idx === nodos.length - 1;
       resultado.push({ item: it, depth, guiasAncestros: guias, esUltimo });
       const hijos = hijosDe.get(it.id);
-      if (hijos && hijos.length > 0) recorrer(hijos, depth + 1, [...guias, !esUltimo]);
+      if (hijos && hijos.length > 0) {
+        // Las tareas raíz no son "hermanas" entre sí para el árbol (son tareas independientes que
+        // comparten lista, no un padre en común) - que una tenga más raíces después no debe
+        // dibujar una línea de más en sus hijas. Sólo a partir de profundidad 1 el "sigue habiendo
+        // hermanas" es real y hay que arrastrarlo.
+        const guiasHijos = depth === 0 ? [] : [...guias, !esUltimo];
+        recorrer(hijos, depth + 1, guiasHijos);
+      }
     });
   };
   recorrer(raices, 0, []);
@@ -618,15 +625,27 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
             }`}
           >
             {depth > 0 && (
+              // El ancho de cada columna (24px) es el mismo que el del dibujo de horario (w-6), para
+              // que la línea quede centrada justo debajo de ese dibujo en la fila padre y entre
+              // justo en el borde del de esta fila - da la sensación de que sale de uno y llega al
+              // otro. El propio conector (el último) es un solo trazo SVG (antes eran 2 divs
+              // separados, el vertical y el horizontal, y a veces no quedaban perfectamente unidos).
               <div className="flex self-stretch shrink-0">
                 {guiasAncestros.map((continua, i) => (
-                  <div key={i} className="relative w-4 shrink-0">
+                  <div key={i} className="relative shrink-0" style={{ width: 24 }}>
                     {continua && <div className="absolute left-1/2 top-0 bottom-0 w-px bg-[var(--border)]" />}
                   </div>
                 ))}
-                <div className="relative w-4 shrink-0">
-                  <div className="absolute left-1/2 top-0 w-px bg-[var(--border)]" style={{ bottom: esUltimo ? '50%' : 0 }} />
-                  <div className="absolute left-1/2 top-1/2 w-2 h-px bg-[var(--border)]" />
+                <div className="relative shrink-0" style={{ width: 24 }}>
+                  <svg className="absolute inset-0" width="24" height="100%" viewBox="0 0 24 100" preserveAspectRatio="none">
+                    <path
+                      d={esUltimo ? 'M12,0 L12,50 L24,50' : 'M12,0 L12,100 M12,50 L24,50'}
+                      fill="none"
+                      stroke="var(--border)"
+                      strokeWidth="1"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </svg>
                 </div>
               </div>
             )}
@@ -661,11 +680,10 @@ function TrabajoRows({ items, onEdit, onDelete, onReorder, ocultarCampo, estadoO
                         type="button"
                         data-tree-toggle
                         onClick={e => { e.stopPropagation(); onToggleColapso(it.id); }}
-                        className="flex items-center gap-0.5 text-[0.625rem] font-bold px-1.5 py-0.5 rounded-full bg-[var(--bg-surface-hover)] text-[var(--text-secondary)] border border-[var(--border)] hover:text-[var(--text-primary)] transition-colors"
+                        className="flex items-center text-[0.625rem] font-bold leading-none text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
                         title={colapsado ? 'Mostrar dependientes' : 'Ocultar dependientes'}
                       >
-                        {colapsado ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
-                        {hijosDirectos.length}
+                        {colapsado ? <><ChevronRight size={10} />{hijosDirectos.length}</> : <ChevronDown size={10} />}
                       </button>
                     )}
                     {estadosList.map(valor => {
