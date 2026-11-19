@@ -20,7 +20,7 @@ internal sealed class TrayContext : ApplicationContext
         _flyout.CountChanged += c => { _count = c; _signedOut = false; RefreshIcon(); };
         _flyout.SignedOut += () => { _count = null; _signedOut = true; RefreshIcon(); };
 
-        var menu = new ContextMenuStrip { Renderer = new DarkMenuRenderer(), ShowImageMargin = false };
+        var menu = new ContextMenuStrip { Renderer = new DarkMenuRenderer(), ShowImageMargin = false, ShowCheckMargin = true };
         menu.Items.Add("Abrir", null, (_, _) => _flyout.ShowFlyout());
         menu.Items.Add("Abrir en el navegador", null, (_, _) => OpenInBrowser(Url));
         menu.Items.Add("Recargar", null, (_, _) => _flyout.Reload());
