@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { Briefcase, ListChecks, Clock, Building2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { avisarAlWidget } from '../services/widgetBridge';
 
 function GoogleIcon({ size = 18 }: { size?: number }) {
   return (
@@ -65,6 +66,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
+    avisarAlWidget({ type: 'signedOut' });
     return (
       <Shell>
         <div>

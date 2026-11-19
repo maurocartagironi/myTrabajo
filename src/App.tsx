@@ -6,6 +6,7 @@ import SavingIndicator from './components/SavingIndicator';
 import Header from './components/Header';
 import TrabajoApp from './components/TrabajoApp';
 import { ServerCrash } from 'lucide-react';
+import { useWidgetBridge } from './services/widgetBridge';
 
 function ServerOffline() {
   return (
@@ -26,7 +27,8 @@ function ServerOffline() {
 }
 
 function AppInner() {
-  const { loading, serverOk } = useTrabajo();
+  const { data, loading, serverOk } = useTrabajo();
+  useWidgetBridge(data.tareas, !loading && serverOk);
 
   if (loading) {
     return (
